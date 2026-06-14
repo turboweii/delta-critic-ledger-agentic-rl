@@ -27,7 +27,6 @@ def add_tau_bench_path(path: str | None) -> None:
     candidates = []
     if path:
         candidates.append(Path(path))
-    candidates.append(ROOT.parent / "agentic-grpo-longhorizon-main" / "tau-bench")
     candidates.append(ROOT.parent / "tau-bench")
     for candidate in candidates:
         if (candidate / "tau_bench").exists():
@@ -151,7 +150,10 @@ def main() -> None:
     with open(runs_path, "w", encoding="utf-8") as f:
         for task_id in range(num_tasks):
             for sample_id in range(num_samples):
-                env = get_env(
+                from delta_critic_ledger.tau_compat import create_tau_env
+
+                env = create_tau_env(
+                    get_env,
                     env_name=env_cfg["env_name"],
                     user_strategy="llm",
                     user_model=env_cfg["user_model"],

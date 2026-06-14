@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -11,6 +12,17 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from delta_critic_ledger.config import ensure_dir, load_config
 from delta_critic_ledger.evaluation import OpenAICompatPolicy, run_single_task, write_eval_report
+
+
+def add_tau_bench_path() -> None:
+    candidates = []
+    if os.environ.get("TAU_BENCH_PATH"):
+        candidates.append(Path(os.environ["TAU_BENCH_PATH"]))
+    candidates.append(ROOT.parent / "tau-bench")
+    for candidate in candidates:
+        if (candidate / "tau_bench").is_dir():
+            sys.path.insert(0, str(candidate))
+            return
 
 
 def main() -> None:
@@ -33,8 +45,7 @@ def main() -> None:
         print(f"Wrote dry-run eval manifest to {out}")
         return
 
-    tau_bench_path = ROOT.parent / "agentic-grpo-longhorizon-main" / "tau-bench"
-    sys.path.insert(0, str(tau_bench_path))
+    add_tau_bench_path()
     from tau_bench.envs import get_env
 
     env_cfg = cfg["env"]
@@ -44,7 +55,10 @@ def main() -> None:
     num_samples = int(env_cfg.get("num_samples_per_task", 4))
     for task_id in range(num_tasks):
         for sample_id in range(num_samples):
-            env = get_env(
+            from delta_critic_ledger.tau_compat import create_tau_env
+
+            env = create_tau_env(
+                get_env,
                 env_name=env_cfg["env_name"],
                 user_strategy="llm",
                 user_model=env_cfg["user_model"],

@@ -1,27 +1,27 @@
 [
   {
     "step": 50,
-    "config": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/eval_step_50.json",
-    "output_dir": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/step_50"
+    "config": "outputs/delta_ledger_checkpoint_eval/eval_step_50.json",
+    "output_dir": "outputs/delta_ledger_checkpoint_eval/step_50"
   },
   {
     "step": 100,
-    "config": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/eval_step_100.json",
-    "output_dir": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/step_100"
+    "config": "outputs/delta_ledger_checkpoint_eval/eval_step_100.json",
+    "output_dir": "outputs/delta_ledger_checkpoint_eval/step_100"
   },
   {
     "step": 150,
-    "config": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/eval_step_150.json",
-    "output_dir": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/step_150"
+    "config": "outputs/delta_ledger_checkpoint_eval/eval_step_150.json",
+    "output_dir": "outputs/delta_ledger_checkpoint_eval/step_150"
   },
   {
     "step": 200,
-    "config": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/eval_step_200.json",
-    "output_dir": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/step_200"
+    "config": "outputs/delta_ledger_checkpoint_eval/eval_step_200.json",
+    "output_dir": "outputs/delta_ledger_checkpoint_eval/step_200"
   },
   {
     "step": 300,
-    "config": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/eval_step_300.json",
-    "output_dir": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/step_300"
+    "config": "outputs/delta_ledger_checkpoint_eval/eval_step_300.json",
+    "output_dir": "outputs/delta_ledger_checkpoint_eval/step_300"
   }
 ]

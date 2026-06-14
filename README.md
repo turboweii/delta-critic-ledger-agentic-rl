@@ -68,7 +68,7 @@ python3 scripts/train/grpo/gen_tool_config.py
 bash scripts/vllm_server/start_teacher_32b_awq_8x4090.sh
 bash scripts/vllm_server/start_user_32b_awq_8x4090.sh
 
-# 3. Collect real tau-bench teacher-rollout SFT data
+# 3. Collect real tau-bench teacher-rollout SFT data and build GRPO parquet
 bash scripts/train/sft/collect_sft_teacher_8x4090.sh
 
 # 4. Stop teacher/user vLLM servers, then train and merge LoRA policy
@@ -85,7 +85,10 @@ python3 scripts/data/collect_tau_rollouts.py \
 # 7. Delta-Critic + Evidence Ledger GRPO
 bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
 
-# 8. Evaluation
+# 8. Export veRL LoRA checkpoints to standalone HF models
+bash scripts/train/grpo/export_grpo_checkpoints.sh
+
+# 9. Evaluation (keep the 32B user simulator online on port 8001)
 bash scripts/eval/eval_sft_airline_8x4090_32b_user.sh
 bash scripts/eval/eval_delta_grpo_airline_8x4090_32b_user.sh
 bash scripts/eval/eval_checkpoints_delta_grpo.sh
@@ -107,6 +110,26 @@ terminal_reward + beta_delta * state_delta + beta_evidence * ledger_bonus
 
 For low-resource fallback, keep using `configs/models/4x4090_qwen.yaml` and
 `scripts/train/grpo/run_delta_ledger_grpo_4x4090.sh`.
+
+## One-A800 End-to-End Validation
+
+Before the production 8x4090 run, one A800 80GB can validate all interfaces and
+training stages at reduced scale. Its default SFT input is deterministic oracle
+bootstrap data, so the smoke path does not require a memory-heavy teacher rollout:
+
+```bash
+bash scripts/run_a800_80g_smoke.sh preflight
+bash scripts/run_a800_80g_smoke.sh prepare
+bash scripts/run_a800_80g_smoke.sh sft
+bash scripts/run_a800_80g_smoke.sh eval-sft
+bash scripts/run_a800_80g_smoke.sh grpo
+bash scripts/run_a800_80g_smoke.sh eval-grpo
+```
+
+The GRPO and evaluation stages still use real tau-bench and the 32B-AWQ user
+simulator. `collect-real` separately checks one real 32B teacher trajectory, but
+is not part of `all`. The 8x4090 configuration remains the primary experiment.
+See `docs/server_runbook_1xa800_80g_smoke.md`.
 
 The demo writes:
 
@@ -134,14 +157,8 @@ Experiment configs:
 - `airline_grounding_stress`
 - `airline_state_delta_stress`
 
-## Compared With agentic-grpo-longhorizon
+## Independence
 
-This project now mirrors the same engineering shape:
-
-- YAML configs for model, SFT, GRPO, interaction, tool schema, and eval.
-- `src/` modules for environment reward logic and veRL integration.
-- `scripts/` for vLLM servers, SFT, GRPO, eval, ablation, and analysis.
-- `experiments/` and `outputs/` artifacts.
-
-The core method is different: no PRM-Lite and no LATA. The project-specific
-module is state-delta credit assignment plus evidence-grounded write diagnosis.
+The runtime imports only this repository's `src/` package plus independently
+installed tau-bench and veRL v0.6.1. It does not import files, configs, or modules
+from another agentic-RL project.

@@ -1,0 +1,19 @@
+env:
+  env_name: "airline"
+  task_split: "test"
+  num_tasks: 2
+  num_samples_per_task: 1
+  max_turns: 8
+  user_model: "Qwen/Qwen2.5-32B-Instruct-AWQ"
+  user_provider: "openai"
+  user_base_url: "http://localhost:8001/v1"
+
+policy:
+  model_name: "experiments/delta_ledger_grpo_1xa800_80g_smoke/hf_step_10"
+  served_model_name: "delta-assistant-7b-a800-grpo-step10"
+  base_url: "http://localhost:8000/v1"
+  temperature: 0.7
+  top_p: 0.9
+
+output:
+  dir: "outputs/eval_grpo_1xa800_80g_smoke"

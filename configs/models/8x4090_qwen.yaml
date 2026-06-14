@@ -15,7 +15,7 @@ user:
   model_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
   model_path: "../models/Qwen2.5-32B-Instruct-AWQ"
   quantization: "awq"
-  served_name: "delta-user-32b-awq"
+  served_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
   base_url: "http://localhost:8001/v1"
   port: 8001
   cuda_visible_devices: "2,3"
@@ -27,7 +27,7 @@ teacher:
   model_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
   model_path: "../models/Qwen2.5-32B-Instruct-AWQ"
   quantization: "awq"
-  served_name: "delta-teacher-32b-awq"
+  served_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
   base_url: "http://localhost:8002/v1"
   port: 8002
   cuda_visible_devices: "0,1"

@@ -32,7 +32,7 @@ previous evidence.
 
 ## Training Signal
 
-For future online RL integration:
+The online GRPO integration uses:
 
 ```text
 R = terminal_reward
@@ -49,12 +49,13 @@ Default demo values:
 
 This standalone implementation includes:
 
-- A mock airline environment with read/write tools.
+- A mock airline environment with read/write tools for CPU unit tests.
 - Delta-Critic goal diff and per-step reward.
 - Evidence Ledger entity extraction and grounding diagnosis.
 - Demo scripts that generate delta and ledger traces.
 - Unit tests that do not require tau-bench or external packages.
-
-Future integration with tau-bench can replace the mock environment with real
-`env.data`, real `env.step(Action(...))`, and real `task.actions`.
-
+- Real tau-bench airline teacher-rollout SFT data collection.
+- 7B LoRA SFT and veRL multi-turn GRPO integration.
+- An 8x4090 production configuration with a 32B-AWQ user simulator.
+- A 1xA800 80GB reduced-scale pipeline check using deterministic bootstrap data,
+  with one-task 32B teacher collection available as a separate optional check.

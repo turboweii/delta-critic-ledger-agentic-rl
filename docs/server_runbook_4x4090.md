@@ -18,12 +18,13 @@ GPU plan:
 
 ## Setup
 
-Install dependencies similar to the reference project:
+Install this project plus independent sibling checkouts of tau-bench and veRL:
 
 ```bash
-pip install torch transformers peft datasets pyyaml vllm
-pip install -e ../agentic-grpo-longhorizon-main/tau-bench
-pip install -e ../agentic-grpo-longhorizon-main/verl
+pip install -r requirements-server.txt
+pip install -e ../tau-bench
+git -C ../verl checkout v0.6.1
+pip install -e ../verl
 ```
 
 Generate veRL tool config:

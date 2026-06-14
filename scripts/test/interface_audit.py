@@ -92,7 +92,13 @@ def assert_interaction_interface(interaction_config: Path) -> None:
     if not class_name.endswith("DeltaTauBenchInteraction"):
         raise AssertionError(f"{interaction_config} class_name should point to DeltaTauBenchInteraction.")
 
-    for method in ("start_interaction", "generate_response", "calculate_score", "finalize_interaction"):
+    for method in (
+        "start_interaction",
+        "get_initial_response",
+        "generate_response",
+        "calculate_score",
+        "finalize_interaction",
+    ):
         attr = getattr(DeltaTauBenchInteraction, method, None)
         if attr is None:
             raise AssertionError(f"DeltaTauBenchInteraction is missing {method}.")
@@ -123,6 +129,8 @@ def assert_grpo_config(grpo_config: Path, expected_gpus: int) -> None:
     trainer = cfg.get("trainer", {})
     algorithm = cfg.get("algorithm", {})
     multi_turn = rollout.get("multi_turn", {})
+    agent = rollout.get("agent", {})
+    reward_function = cfg.get("custom_reward_function", {})
 
     if rollout.get("calculate_log_probs") is not True:
         raise AssertionError("rollout.calculate_log_probs must be true for bypass_mode log-prob reuse.")
@@ -132,6 +140,25 @@ def assert_grpo_config(grpo_config: Path, expected_gpus: int) -> None:
         raise AssertionError("rollout.multi_turn.interaction_config_path missing.")
     if "tool_config_path" not in multi_turn:
         raise AssertionError("rollout.multi_turn.tool_config_path missing.")
+    if agent.get("default_agent_loop") != "tau_bench_tool_agent":
+        raise AssertionError("rollout.agent.default_agent_loop must inject tau-bench's initial user message.")
+    agent_config = ROOT / str(agent.get("agent_loop_config_path", ""))
+    if not agent_config.is_file():
+        raise AssertionError(f"Custom agent loop config is missing: {agent_config}")
+    if not str(reward_function.get("path", "")).endswith("verl_integration/reward.py"):
+        raise AssertionError("custom_reward_function.path must point to the Delta/Ledger reward adapter.")
+    if reward_function.get("name") != "compute_score":
+        raise AssertionError("custom_reward_function.name must be compute_score.")
+    from delta_critic_ledger.verl_integration.reward import compute_score
+
+    reward = compute_score(
+        data_source="tau_bench_airline",
+        solution_str="",
+        ground_truth="",
+        extra_info={"final_score": 1.25, "score_info": {"outcome_score": 1.0}},
+    )
+    if reward.get("score") != 1.25 or reward.get("outcome_score") != 1.0:
+        raise AssertionError("Custom reward adapter did not preserve the interaction score.")
     if int(trainer.get("n_gpus_per_node", 0)) != expected_gpus:
         raise AssertionError(f"trainer.n_gpus_per_node must be {expected_gpus}.")
     if not actor.get("use_kl_loss", False):
@@ -159,11 +186,20 @@ def assert_model_config(model_config: Path, expected_user_fragment: str) -> None
 def main() -> None:
     parser = argparse.ArgumentParser(description="Audit local tau-bench/veRL interface assumptions.")
     parser.add_argument("--expected-gpus", type=int, default=6)
+    parser.add_argument(
+        "--grpo-config",
+        default="configs/train/grpo/delta_ledger_grpo_8x4090_32b_user.yaml",
+        help="GRPO config path relative to the project root, or an absolute path.",
+    )
     args = parser.parse_args()
+
+    grpo_config = Path(args.grpo_config)
+    if not grpo_config.is_absolute():
+        grpo_config = ROOT / grpo_config
 
     assert_tool_interfaces(ROOT / "configs/tool_config/tau_bench_airline_tools.yaml")
     assert_interaction_interface(ROOT / "configs/interaction_config/tau_bench_airline_delta_ledger.yaml")
-    assert_grpo_config(ROOT / "configs/train/grpo/delta_ledger_grpo_8x4090_32b_user.yaml", args.expected_gpus)
+    assert_grpo_config(grpo_config, args.expected_gpus)
     assert_model_config(ROOT / "configs/models/8x4090_qwen.yaml", "32B")
     print("interface_audit: ok")
 

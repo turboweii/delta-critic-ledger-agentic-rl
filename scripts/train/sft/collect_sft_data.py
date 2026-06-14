@@ -13,13 +13,13 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from delta_critic_ledger.config import ensure_dir
 from delta_critic_ledger.evaluation import OpenAICompatPolicy
+from delta_critic_ledger.tau_compat import create_tau_env
 
 
 def add_tau_bench_path(path: str | None) -> None:
     candidates = []
     if path:
         candidates.append(Path(path))
-    candidates.append(ROOT.parent / "agentic-grpo-longhorizon-main" / "tau-bench")
     candidates.append(ROOT.parent / "tau-bench")
     for candidate in candidates:
         if (candidate / "tau_bench").exists():
@@ -68,7 +68,8 @@ def build_env(args: argparse.Namespace, task_id: int):
     from tau_bench.envs import get_env
 
     user_strategy = args.user_strategy if args.use_user_sim else "human"
-    return get_env(
+    return create_tau_env(
+        get_env,
         env_name=args.env_name,
         user_strategy=user_strategy,
         user_model=args.user_model,

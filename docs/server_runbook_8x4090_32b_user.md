@@ -35,7 +35,7 @@ Teacher policy:
 ```bash
 CUDA_DEVICES=0,1 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-teacher-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8002 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -48,7 +48,7 @@ User simulator:
 ```bash
 CUDA_DEVICES=2,3 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-user-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8001 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -67,6 +67,9 @@ python3 scripts/vllm_server/check_servers.py \
 ```bash
 bash scripts/train/sft/collect_sft_teacher_8x4090.sh
 ```
+
+成功采集后，该脚本还会自动生成 GRPO 所需的
+`experiments/grpo_airline/{train,val}.parquet`。
 
 After collection finishes, stop the teacher and user vLLM servers to release GPU
 memory. Then run LoRA SFT:
@@ -106,7 +109,7 @@ User simulator:
 ```bash
 CUDA_DEVICES=1,2 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-user-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8001 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -129,7 +132,7 @@ Before GRPO, stop the assistant eval server and restart the user simulator on GP
 ```bash
 CUDA_DEVICES=6,7 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-user-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8001 \
 TP_SIZE=2 \
 bash scripts/vllm_server/start_user_32b_awq_8x4090.sh
@@ -147,6 +150,12 @@ python3 scripts/data/collect_tau_rollouts.py \
 bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
 ```
 
+训练结束后把 veRL LoRA checkpoint 导出为可由 vLLM 加载的 HF 模型：
+
+```bash
+bash scripts/train/grpo/export_grpo_checkpoints.sh
+```
+
 Memory profile:
 
 ```bash
@@ -158,7 +167,11 @@ DURATION=600 INTERVAL=5 bash scripts/test/profile_memory.sh
 ```bash
 bash scripts/eval/eval_sft_airline_8x4090_32b_user.sh
 bash scripts/eval/eval_delta_grpo_airline_8x4090_32b_user.sh
+bash scripts/eval/eval_checkpoints_delta_grpo.sh
 ```
+
+逐 checkpoint 脚本要求 32B user endpoint 已在 `localhost:8001` 在线，并会
+自行在 GPU 0 逐个启动和关闭导出的 assistant checkpoint。
 
 Use `--dry-run` first to validate output paths:
 

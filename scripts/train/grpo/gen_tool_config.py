@@ -5,8 +5,12 @@ import argparse
 import sys
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
+
+from delta_critic_ledger.tau_compat import create_tau_env
 
 
 AIRLINE_TOOLS = [
@@ -30,19 +34,27 @@ AIRLINE_TOOLS = [
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default=str(ROOT / "configs" / "tool_config" / "tau_bench_airline_tools.yaml"))
-    parser.add_argument("--tau-bench-path", default=str(ROOT.parent / "agentic-grpo-longhorizon-main" / "tau-bench"))
+    parser.add_argument("--tau-bench-path", default=None)
     args = parser.parse_args()
-    sys.path.insert(0, args.tau_bench_path)
 
-    ref_tool_config = ROOT.parent / "agentic-grpo-longhorizon-main" / "agentic-grpo-longhorizon" / "configs" / "tool_config" / "tau_bench_airline_tools.yaml"
+    candidates = []
+    if args.tau_bench_path:
+        candidates.append(Path(args.tau_bench_path))
+    candidates.append(ROOT.parent / "tau-bench")
+    for candidate in candidates:
+        if (candidate / "tau_bench").is_dir():
+            sys.path.insert(0, str(candidate))
+            break
+
+    out = Path(args.output)
     try:
         from tau_bench.envs import get_env
-        import yaml
 
-        env = get_env(
+        env = create_tau_env(
+            get_env,
             env_name="airline",
-            user_strategy="llm",
-            user_model="dummy",
+            user_strategy="human",
+            user_model="unused",
             user_provider="openai",
             task_split="test",
             task_index=0,
@@ -50,26 +62,26 @@ def main() -> None:
         schemas = {tool["function"]["name"]: tool for tool in env.tools_info}
     except Exception as exc:
         print(f"[WARN] Could not import tau-bench tools: {exc}")
-        try:
-            import yaml
+        if not out.exists():
+            raise SystemExit(
+                "tau-bench schema generation failed and no committed tool config exists. "
+                "Pass --tau-bench-path /path/to/tau-bench."
+            ) from exc
+        existing = yaml.safe_load(out.read_text(encoding="utf-8")) or {}
+        existing_tools = existing.get("tools", [])
+        schemas = {
+            item["tool_schema"]["function"]["name"]: item["tool_schema"]
+            for item in existing_tools
+            if item.get("tool_schema", {}).get("function", {}).get("name")
+        }
+        missing = sorted(set(AIRLINE_TOOLS) - set(schemas))
+        if missing:
+            raise SystemExit(
+                "Existing tool config is incomplete after tau-bench import failed; "
+                f"missing schemas: {', '.join(missing)}"
+            ) from exc
+        print(f"[WARN] Preserving complete schemas already present in {out}")
 
-            with open(ref_tool_config, "r", encoding="utf-8") as f:
-                ref = yaml.safe_load(f)
-            for item in ref["tools"]:
-                name = item["tool_schema"]["function"]["name"]
-                item["class_name"] = f"delta_critic_ledger.verl_integration.tools.TauBench_{name}_Tool"
-                item["config"] = {"type": "native"}
-            out = Path(args.output)
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(yaml.safe_dump(ref, sort_keys=False, allow_unicode=True), encoding="utf-8")
-            print(f"Wrote {out} from reference tool schema fallback")
-            return
-        except Exception as fallback_exc:
-            print(f"[WARN] Could not read reference tool schema, writing class-only fallback: {fallback_exc}")
-        schemas = {}
-        yaml = None
-
-    out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     tools = []
     for name in AIRLINE_TOOLS:
@@ -80,13 +92,7 @@ def main() -> None:
         if name in schemas:
             item["tool_schema"] = schemas[name]
         tools.append(item)
-    if yaml is not None:
-        out.write_text(yaml.safe_dump({"tools": tools}, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    else:
-        lines = ["tools:"]
-        for item in tools:
-            lines.extend([f"  - class_name: {item['class_name']}", "    config:", "      type: native"])
-        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    out.write_text(yaml.safe_dump({"tools": tools}, sort_keys=False, allow_unicode=True), encoding="utf-8")
     print(f"Wrote {out}")
 
 

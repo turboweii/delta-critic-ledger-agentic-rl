@@ -20,3 +20,10 @@ python3 scripts/train/sft/collect_sft_data.py \
   --temperatures 0.0,0.0,0.5,0.5,0.8,0.8,1.0,1.0 \
   --num-workers 2 \
   --holdout-size 10
+
+[[ -s experiments/sft_collect_airline/train.jsonl ]] || {
+  echo "No successful teacher trajectories were collected; inspect experiments/sft_collect_airline/summary.json." >&2
+  exit 1
+}
+
+bash scripts/train/grpo/prepare_grpo_data.sh

@@ -48,7 +48,8 @@ actor_rollout_ref:
     name: "vllm"
     mode: async
     agent:
-      default_agent_loop: tool_agent
+      default_agent_loop: tau_bench_tool_agent
+      agent_loop_config_path: configs/agent_loop/tau_bench_agent_loop.yaml
     multi_turn:
       enable: true
       format: "hermes"
@@ -75,7 +76,6 @@ actor_rollout_ref:
     fsdp_config:
       optimizer_offload: true
       param_offload: true
-      use_fused_kernels: true
       model_dtype: bf16
     model:
       path: experiments/sft_lora_merged
@@ -89,6 +89,10 @@ algorithm:
     kl_coef: 0.01
   rollout_correction:
     bypass_mode: true
+
+custom_reward_function:
+  path: src/delta_critic_ledger/verl_integration/reward.py
+  name: compute_score
 
 trainer:
   total_epochs: 20

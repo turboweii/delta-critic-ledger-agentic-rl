@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MODEL_PATH=${MODEL_PATH:-"../models/Qwen2.5-32B-Instruct-AWQ"}
-SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-"delta-teacher-32b-awq"}
+SERVED_MODEL_NAME=${SERVED_MODEL_NAME:-"Qwen/Qwen2.5-32B-Instruct-AWQ"}
 PORT=${PORT:-8002}
 CUDA_DEVICES=${CUDA_DEVICES:-0,1}
 TP_SIZE=${TP_SIZE:-2}
@@ -13,7 +13,7 @@ MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 export CUDA_VISIBLE_DEVICES="${CUDA_DEVICES}"
 export VLLM_USE_V1=${VLLM_USE_V1:-1}
 
-python -m vllm.entrypoints.openai.api_server \
+exec python -m vllm.entrypoints.openai.api_server \
   --model "${MODEL_PATH}" \
   --served-model-name "${SERVED_MODEL_NAME}" \
   --port "${PORT}" \

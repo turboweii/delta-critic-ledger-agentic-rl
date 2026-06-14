@@ -67,8 +67,8 @@ pip install -r requirements-server.txt
 
 ```bash
 cd /home/ubuntu
-git clone <TAU_BENCH_REPO_URL> tau-bench
-git clone <VERL_REPO_URL> verl
+git clone https://github.com/sierra-research/tau-bench.git tau-bench
+git clone --branch v0.6.1 https://github.com/volcengine/verl.git verl
 ```
 
 安装：
@@ -77,6 +77,8 @@ git clone <VERL_REPO_URL> verl
 conda activate dcl-agentic-rl
 
 pip install -e /home/ubuntu/tau-bench
+git -C /home/ubuntu/verl fetch --tags
+git -C /home/ubuntu/verl checkout v0.6.1
 pip install -e /home/ubuntu/verl
 ```
 
@@ -232,7 +234,7 @@ export PYTHONPATH=$PWD/src:/home/ubuntu/tau-bench:/home/ubuntu/verl:$PYTHONPATH
 
 CUDA_DEVICES=0,1 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-teacher-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8002 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -257,7 +259,7 @@ export PYTHONPATH=$PWD/src:/home/ubuntu/tau-bench:/home/ubuntu/verl:$PYTHONPATH
 
 CUDA_DEVICES=2,3 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-user-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8001 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -454,7 +456,7 @@ export PYTHONPATH=$PWD/src:/home/ubuntu/tau-bench:/home/ubuntu/verl:$PYTHONPATH
 
 CUDA_DEVICES=1,2 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-user-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8001 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -666,7 +668,7 @@ tmux kill-window -t user32b_eval
 ```bash
 CUDA_DEVICES=6,7 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-user-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8001 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -681,6 +683,19 @@ nvidia-smi
 ```
 
 ### 13.3 启动 GRPO
+
+SFT collector 已在成功结束后自动根据 `split.json` 生成：
+
+```text
+experiments/grpo_airline/train.parquet
+experiments/grpo_airline/val.parquet
+```
+
+如果只需要重建这两个文件：
+
+```bash
+bash scripts/train/grpo/prepare_grpo_data.sh
+```
 
 新 session：
 
@@ -710,11 +725,13 @@ configs/train/grpo/delta_ledger_grpo_8x4090_32b_user.yaml
 ```text
 rollout.name = vllm
 multi_turn.enable = true
+agent.default_agent_loop = tau_bench_tool_agent
 interaction_config_path = configs/interaction_config/tau_bench_airline_delta_ledger.yaml
 tool_config_path = configs/tool_config/tau_bench_airline_tools.yaml
+custom_reward_function = src/delta_critic_ledger/verl_integration/reward.py
 calculate_log_probs = true
 algorithm.rollout_correction.bypass_mode = true
-n_gpus_per_node = 8
+n_gpus_per_node = 6
 ```
 
 输出：
@@ -744,6 +761,13 @@ DURATION=3600 INTERVAL=5 bash scripts/test/profile_memory.sh
 ```
 
 ## 14. GRPO Evaluation
+
+veRL 保存的是分布式训练 checkpoint，不是可直接交给 vLLM 的完整 HF 目录。
+训练完成后先合并各 step 的 LoRA adapter：
+
+```bash
+bash scripts/train/grpo/export_grpo_checkpoints.sh
+```
 
 ### 14.1 启动 GRPO checkpoint assistant
 
@@ -783,7 +807,7 @@ export PYTHONPATH=$PWD/src:/home/ubuntu/tau-bench:/home/ubuntu/verl:$PYTHONPATH
 
 CUDA_DEVICES=1,2 \
 MODEL_PATH=../models/Qwen2.5-32B-Instruct-AWQ \
-SERVED_MODEL_NAME=delta-user-32b-awq \
+SERVED_MODEL_NAME=Qwen/Qwen2.5-32B-Instruct-AWQ \
 PORT=8001 \
 TP_SIZE=2 \
 MAX_MODEL_LEN=12288 \
@@ -803,6 +827,12 @@ python3 scripts/vllm_server/check_servers.py \
 
 ```bash
 bash scripts/eval/eval_delta_grpo_airline_8x4090_32b_user.sh
+```
+
+逐 checkpoint 评估时只需要保持 32B user endpoint 在线。下面的脚本会在 GPU 0
+依次启动、评估并关闭每个已导出的 assistant checkpoint：
+
+```bash
 bash scripts/eval/eval_checkpoints_delta_grpo.sh
 ```
 
@@ -946,7 +976,12 @@ bash scripts/eval/eval_sft_airline_8x4090_32b_user.sh
 # Stop assistant eval server; keep/restart user simulator on GPUs 6-7, then train GRPO on GPUs 0-5
 bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
 
-# Restart assistant/user, then eval GRPO
+# Export veRL LoRA checkpoints to standalone HF directories
+bash scripts/train/grpo/export_grpo_checkpoints.sh
+
+# Restart assistant/user for a single final eval
 bash scripts/eval/eval_delta_grpo_airline_8x4090_32b_user.sh
+
+# Keep only user online; this script manages each checkpoint assistant on GPU 0
 bash scripts/eval/eval_checkpoints_delta_grpo.sh
 ```

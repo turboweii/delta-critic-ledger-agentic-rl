@@ -12,7 +12,7 @@ MAX_MODEL_LEN=${MAX_MODEL_LEN:-16384}
 export CUDA_VISIBLE_DEVICES="${CUDA_DEVICES}"
 export VLLM_USE_V1=${VLLM_USE_V1:-1}
 
-python -m vllm.entrypoints.openai.api_server \
+exec python -m vllm.entrypoints.openai.api_server \
   --model "${MODEL_PATH}" \
   --served-model-name "${SERVED_MODEL_NAME}" \
   --port "${PORT}" \
@@ -21,4 +21,3 @@ python -m vllm.entrypoints.openai.api_server \
   --max-model-len "${MAX_MODEL_LEN}" \
   --max-num-seqs 8 \
   --trust-remote-code
-

@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from delta_critic_ledger.verl_integration.context import CURRENT_TAU_ENV, CURRENT_TAU_STATE, make_initial_state
 from delta_critic_ledger.verl_integration.reward_state import compute_delta_ledger_reward, init_delta_reward_state
+from delta_critic_ledger.tau_compat import create_tau_env
 
 try:
     from verl.interactions.base import BaseInteraction
@@ -42,7 +43,8 @@ class DeltaTauBenchInteraction(BaseInteraction):
             instance_id = str(uuid.uuid4())
         from tau_bench.envs import get_env
 
-        env = get_env(
+        env = create_tau_env(
+            get_env,
             env_name=self.env_name,
             user_strategy=self.user_strategy,
             user_model=self.user_model,
@@ -51,7 +53,8 @@ class DeltaTauBenchInteraction(BaseInteraction):
             task_split=self.task_split,
             task_index=int(task_id),
         )
-        env.reset(task_index=int(task_id))
+        reset_result = env.reset(task_index=int(task_id))
+        initial_user_response = str(getattr(reset_result, "observation", reset_result))
         state = make_initial_state(int(task_id), instance_id=instance_id, env_id=id(env))
         state["state_id"] = id(state)
         state["max_trace_steps"] = self.max_trace_steps
@@ -64,8 +67,20 @@ class DeltaTauBenchInteraction(BaseInteraction):
         )
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)
-        self._instance_dict[instance_id] = {"env": env, "state": state, "task_id": int(task_id), "env_id": id(env)}
+        self._instance_dict[instance_id] = {
+            "env": env,
+            "state": state,
+            "task_id": int(task_id),
+            "env_id": id(env),
+            "initial_user_response": initial_user_response,
+        }
         return instance_id
+
+    async def get_initial_response(self, instance_id: str) -> str:
+        entry = self._instance_dict.get(instance_id)
+        if entry is None:
+            raise RuntimeError(f"Unknown instance_id={instance_id}")
+        return str(entry["initial_user_response"])
 
     async def generate_response(self, instance_id: str, messages: list[dict[str, Any]], **kwargs) -> tuple[bool, str, float, dict[str, Any]]:
         entry = self._instance_dict.get(instance_id)

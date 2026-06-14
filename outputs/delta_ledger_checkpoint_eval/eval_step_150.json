@@ -17,6 +17,6 @@
     "top_p": 0.9
   },
   "output": {
-    "dir": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/step_150"
+    "dir": "outputs/delta_ledger_checkpoint_eval/step_150"
   }
 }

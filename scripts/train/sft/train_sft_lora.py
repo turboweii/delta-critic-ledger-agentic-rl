@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -16,9 +17,12 @@ from delta_critic_ledger.sft_dataset import AssistantOnlyCollator, TrajectorySFT
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=str(ROOT / "configs" / "train" / "sft" / "sft_airline_lora_4x4090.yaml"))
+    parser.add_argument("--model-path", default=os.environ.get("MODEL_7B", ""))
     parser.add_argument("--dry-run", action="store_true", help="Validate config and write manifest without training.")
     args = parser.parse_args()
     cfg = load_config(args.config)
+    if args.model_path:
+        cfg["model"]["name_or_path"] = args.model_path
 
     output_dir = ensure_dir(ROOT / cfg["output"]["dir"])
     manifest_path = ROOT / cfg["output"]["manifest"]
@@ -75,6 +79,7 @@ def main() -> None:
         trust_remote_code=True,
         attn_implementation=cfg["model"].get("attn_impl", "flash_attention_2"),
     )
+    model.config.use_cache = False
     model.gradient_checkpointing_enable()
     lora_cfg = LoraConfig(
         r=int(cfg["lora"]["r"]),
