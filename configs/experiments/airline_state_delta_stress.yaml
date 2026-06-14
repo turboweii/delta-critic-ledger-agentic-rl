@@ -1,0 +1,11 @@
+name: airline_state_delta_stress
+task_ids:
+  - cancel_reservation
+  - baggage_update
+  - flight_update
+trajectory_ids:
+  - successful
+  - noop_then_success
+  - wrong_write
+description: Focuses on state progress, no-op tools, and wrong writes.
+

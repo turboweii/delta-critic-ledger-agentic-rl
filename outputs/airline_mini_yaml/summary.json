@@ -1,0 +1,57 @@
+{
+  "experiment": "airline_mini",
+  "rewards": {
+    "delta_ledger": {
+      "num_runs": 9,
+      "success_rate": 0.6666666666666666,
+      "avg_terminal_reward": 0.6666666666666666,
+      "avg_combined_reward": 0.85,
+      "avg_delta_reward_sum": 0.6666666666666666,
+      "avg_evidence_bonus_sum": -0.16666666666666666,
+      "total_write_actions": 9,
+      "grounded_write_rate": 0.3333333333333333,
+      "conflicting_write_rate": 0.3333333333333333,
+      "ungrounded_write_rate": 0.3333333333333333,
+      "avg_first_positive_delta_step": 1.1666666666666667
+    },
+    "delta_only": {
+      "num_runs": 9,
+      "success_rate": 0.6666666666666666,
+      "avg_terminal_reward": 0.6666666666666666,
+      "avg_combined_reward": 0.8666666666666667,
+      "avg_delta_reward_sum": 0.6666666666666666,
+      "avg_evidence_bonus_sum": -0.16666666666666666,
+      "total_write_actions": 9,
+      "grounded_write_rate": 0.3333333333333333,
+      "conflicting_write_rate": 0.3333333333333333,
+      "ungrounded_write_rate": 0.3333333333333333,
+      "avg_first_positive_delta_step": 1.1666666666666667
+    },
+    "ledger_only": {
+      "num_runs": 9,
+      "success_rate": 0.6666666666666666,
+      "avg_terminal_reward": 0.6666666666666666,
+      "avg_combined_reward": 0.65,
+      "avg_delta_reward_sum": 0.6666666666666666,
+      "avg_evidence_bonus_sum": -0.16666666666666666,
+      "total_write_actions": 9,
+      "grounded_write_rate": 0.3333333333333333,
+      "conflicting_write_rate": 0.3333333333333333,
+      "ungrounded_write_rate": 0.3333333333333333,
+      "avg_first_positive_delta_step": 1.1666666666666667
+    },
+    "terminal_only": {
+      "num_runs": 9,
+      "success_rate": 0.6666666666666666,
+      "avg_terminal_reward": 0.6666666666666666,
+      "avg_combined_reward": 0.6666666666666666,
+      "avg_delta_reward_sum": 0.6666666666666666,
+      "avg_evidence_bonus_sum": -0.16666666666666666,
+      "total_write_actions": 9,
+      "grounded_write_rate": 0.3333333333333333,
+      "conflicting_write_rate": 0.3333333333333333,
+      "ungrounded_write_rate": 0.3333333333333333,
+      "avg_first_positive_delta_step": 1.1666666666666667
+    }
+  }
+}

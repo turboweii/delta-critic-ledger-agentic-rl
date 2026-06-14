@@ -1,0 +1,15 @@
+{
+  "created_for": "standalone deterministic prototype",
+  "configs": [
+    "configs/experiments/airline_mini.json",
+    "configs/reward/terminal_only.json",
+    "configs/reward/delta_only.json",
+    "configs/reward/ledger_only.json",
+    "configs/reward/delta_ledger.json"
+  ],
+  "expected_outputs": [
+    "outputs/airline_mini/summary.json",
+    "outputs/airline_mini/runs.jsonl"
+  ]
+}
+

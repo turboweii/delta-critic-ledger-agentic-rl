@@ -1,0 +1,26 @@
+{
+  "status": "dry_run",
+  "note": "Starts real eval only when tau-bench, vLLM servers, and policy endpoint are available.",
+  "config": {
+    "env": {
+      "env_name": "airline",
+      "task_split": "test",
+      "num_tasks": 50,
+      "num_samples_per_task": 4,
+      "max_turns": 30,
+      "user_model": "Qwen/Qwen2.5-32B-Instruct-AWQ",
+      "user_provider": "openai",
+      "user_base_url": "http://localhost:8001/v1"
+    },
+    "policy": {
+      "model_name": "experiments/delta_ledger_grpo_8x4090/hf_step_300",
+      "served_model_name": "delta-assistant-7b-grpo-step300",
+      "base_url": "http://localhost:8000/v1",
+      "temperature": 0.7,
+      "top_p": 0.9
+    },
+    "output": {
+      "dir": "/home/turbo/DFL/agent/agentic-grpo-longhorizon-main/delta-critic-ledger-agentic-rl/outputs/delta_ledger_checkpoint_eval/step_300"
+    }
+  }
+}

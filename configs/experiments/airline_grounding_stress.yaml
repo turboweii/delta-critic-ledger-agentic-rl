@@ -1,0 +1,9 @@
+name: airline_grounding_stress
+task_ids:
+  - cancel_reservation
+  - flight_update
+trajectory_ids:
+  - wrong_write
+  - premature_write
+description: Focuses on parameter grounding and conflicting writes.
+

@@ -1,0 +1,34 @@
+# Main GRPO config for 8 x RTX 4090 with 32B-AWQ user simulator.
+
+defaults:
+  - delta_ledger_grpo_4x4090
+  - _self_
+
+data:
+  train_batch_size: 4
+  max_prompt_length: 8192
+  max_response_length: 8192
+
+actor_rollout_ref:
+  actor:
+    ppo_mini_batch_size: 4
+    ppo_micro_batch_size_per_gpu: 1
+  rollout:
+    n: 4
+    max_model_len: 16384
+    max_num_batched_tokens: 16384
+    max_num_seqs: 8
+    gpu_memory_utilization: 0.45
+    log_prob_micro_batch_size_per_gpu: 1
+  ref:
+    log_prob_micro_batch_size_per_gpu: 1
+
+trainer:
+  total_epochs: 30
+  total_training_steps: 300
+  save_freq: 50
+  test_freq: 50
+  experiment_name: delta_ledger_grpo_8x4090_32b_user
+  default_local_dir: experiments/delta_ledger_grpo_8x4090/checkpoints
+  # Six GPUs train the policy; GPUs 6-7 keep the 32B-AWQ user simulator online.
+  n_gpus_per_node: 6

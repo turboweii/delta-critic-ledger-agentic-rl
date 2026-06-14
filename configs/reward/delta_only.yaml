@@ -1,0 +1,5 @@
+name: delta_only
+beta_delta: 0.3
+beta_evidence: 0.0
+description: Terminal reward plus state-delta credit.
+
