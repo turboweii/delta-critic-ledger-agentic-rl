@@ -202,3 +202,42 @@ Use `--dry-run` first to validate output paths:
 ```bash
 bash scripts/eval/eval_sft_airline_8x4090_32b_user.sh --dry-run
 ```
+
+## Real GRPO Ablations
+
+Run the real tau-bench ablation matrix with the same 7B policy, 32B user
+simulator, GRPO data, and GPU placement:
+
+```bash
+VARIANTS=terminal_only,delta_only,delta_ledger,delta_ledger_adaptive \
+bash scripts/train/grpo/run_grpo_ablation_8x4090.sh
+```
+
+The variants are:
+
+```text
+terminal_only          terminal reward only
+delta_only             terminal + Delta-Critic state progress
+delta_ledger           terminal + Delta-Critic + Evidence Ledger
+delta_ledger_adaptive  full method plus adaptive entropy / segmented KL
+```
+
+For a quick pilot, run 50 steps first:
+
+```bash
+TOTAL_STEPS=50 SAVE_FREQ=50 TEST_FREQ=50 STEPS=50 \
+bash scripts/train/grpo/run_grpo_ablation_8x4090.sh
+```
+
+Evaluate exported ablation checkpoints:
+
+```bash
+STEPS=50,100,150,200,300 \
+bash scripts/eval/eval_grpo_ablation_8x4090.sh
+```
+
+Summary table:
+
+```text
+outputs/ablation_checkpoint_eval/summary.csv
+```

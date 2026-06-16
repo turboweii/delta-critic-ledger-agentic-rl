@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -159,10 +160,16 @@ class AdaptiveEntropyController:
 
     @classmethod
     def from_config(cls, config: dict[str, Any] | None) -> "AdaptiveEntropyController":
+        env_enabled = os.environ.get("DCL_ADAPTIVE_ENTROPY")
         if not config:
-            return cls()
+            cfg = AdaptiveEntropyConfig()
+            if env_enabled is not None:
+                cfg = AdaptiveEntropyConfig(enabled=env_enabled not in {"0", "false", "False"})
+            return cls(cfg)
         known = {field.name for field in AdaptiveEntropyConfig.__dataclass_fields__.values()}
         values = {key: value for key, value in dict(config).items() if key in known}
+        if env_enabled is not None:
+            values["enabled"] = env_enabled not in {"0", "false", "False"}
         return cls(AdaptiveEntropyConfig(**values))
 
     def adjust_sampling_params(

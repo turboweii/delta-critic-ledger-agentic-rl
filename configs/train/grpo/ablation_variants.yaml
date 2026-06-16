@@ -1,0 +1,26 @@
+# Real tau-bench GRPO ablation variants.
+# These variants share the same data, model, user simulator, and rollout budget.
+
+base_config: delta_ledger_grpo_8x4090_32b_user
+steps: 50,100,150,200,300
+variants:
+  - name: terminal_only
+    beta_delta: 0.0
+    beta_evidence: 0.0
+    adaptive_control: false
+    description: terminal reward only, no Delta/Ledger shaping, no adaptive control
+  - name: delta_only
+    beta_delta: 0.3
+    beta_evidence: 0.0
+    adaptive_control: false
+    description: terminal reward plus Delta-Critic state progress
+  - name: delta_ledger
+    beta_delta: 0.3
+    beta_evidence: 0.1
+    adaptive_control: false
+    description: terminal reward plus Delta-Critic and Evidence Ledger
+  - name: delta_ledger_adaptive
+    beta_delta: 0.3
+    beta_evidence: 0.1
+    adaptive_control: true
+    description: full method with Ledger-guided entropy and segmented KL control
