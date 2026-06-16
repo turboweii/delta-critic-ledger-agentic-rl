@@ -6,6 +6,7 @@ model:
 data:
   train_jsonl: "experiments/sft_collect_airline/train.jsonl"
   eval_jsonl: "experiments/sft_collect_airline/eval.jsonl"
+  tool_config_path: "configs/tool_config/tau_bench_airline_tools.yaml"
   max_length: 8192
 
 lora:
@@ -37,4 +38,3 @@ output:
   dir: "experiments/sft_lora"
   merged_dir: "experiments/sft_lora_merged"
   manifest: "experiments/sft_lora/checkpoint_manifest.json"
-

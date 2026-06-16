@@ -14,6 +14,9 @@ It is not a replacement training configuration.
 The optional `collect-real` stage checks a single real 32B teacher trajectory,
 but it is deliberately excluded from the default smoke chain.
 
+The `prepare` stage uses the task instruction directly and does not start or call
+the 32B user simulator.
+
 ## Required Layout
 
 ```text
@@ -56,6 +59,14 @@ bash scripts/run_a800_80g_smoke.sh sft
 bash scripts/run_a800_80g_smoke.sh eval-sft
 bash scripts/run_a800_80g_smoke.sh grpo
 bash scripts/run_a800_80g_smoke.sh eval-grpo
+```
+
+The `grpo` stage uses the same Adaptive KL / Entropy Controller as the 8x4090
+run. It validates that Ledger traces, online sampling control, and bounded Hydra
+overrides are wired correctly. Disable it for a plain baseline smoke run with:
+
+```bash
+ADAPTIVE_GRPO_CONTROL=0 bash scripts/run_a800_80g_smoke.sh grpo
 ```
 
 To separately verify real teacher collection, run:

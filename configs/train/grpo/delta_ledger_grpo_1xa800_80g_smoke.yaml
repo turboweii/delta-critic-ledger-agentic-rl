@@ -9,7 +9,7 @@ data:
   train_files: experiments/grpo_airline_a800_smoke/train.parquet
   val_files: experiments/grpo_airline_a800_smoke/val.parquet
   train_batch_size: 1
-  max_prompt_length: 2048
+  max_prompt_length: 10240
   max_response_length: 1024
 
 actor_rollout_ref:
@@ -19,7 +19,7 @@ actor_rollout_ref:
     lora_rank: 16
     lora_alpha: 32
   actor:
-    ppo_mini_batch_size: 2
+    ppo_mini_batch_size: 1
     ppo_micro_batch_size_per_gpu: 1
     fsdp_config:
       optimizer_offload: true
@@ -28,8 +28,8 @@ actor_rollout_ref:
   rollout:
     n: 2
     tensor_model_parallel_size: 1
-    max_model_len: 4096
-    max_num_batched_tokens: 2048
+    max_model_len: 12288
+    max_num_batched_tokens: 4096
     max_num_seqs: 2
     gpu_memory_utilization: 0.28
     log_prob_micro_batch_size_per_gpu: 1

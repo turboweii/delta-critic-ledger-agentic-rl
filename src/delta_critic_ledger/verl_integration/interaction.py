@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import logging
+import json
 import uuid
+from dataclasses import asdict, is_dataclass
+from pathlib import Path
 from typing import Any, Optional
 
+from delta_critic_ledger.adaptive_control import summarize_rollout_state
 from delta_critic_ledger.verl_integration.context import CURRENT_TAU_ENV, CURRENT_TAU_STATE, make_initial_state
 from delta_critic_ledger.verl_integration.reward_state import compute_delta_ledger_reward, init_delta_reward_state
 from delta_critic_ledger.tau_compat import create_tau_env
@@ -36,6 +40,7 @@ class DeltaTauBenchInteraction(BaseInteraction):
         self.include_paths = list(delta_cfg.get("include_paths", []))
         self.exclude_paths = list(delta_cfg.get("exclude_paths", []))
         self.max_trace_steps = int(delta_cfg.get("max_trace_steps", 128))
+        self.trace_dir = delta_cfg.get("trace_dir")
         self._instance_dict: dict[str, dict] = {}
 
     async def start_interaction(self, instance_id: Optional[str] = None, task_id: int = 0, **kwargs) -> str:
@@ -81,6 +86,16 @@ class DeltaTauBenchInteraction(BaseInteraction):
         if entry is None:
             raise RuntimeError(f"Unknown instance_id={instance_id}")
         return str(entry["initial_user_response"])
+
+    def is_done(self, instance_id: str) -> bool:
+        entry = self._instance_dict.get(instance_id)
+        return bool(entry and entry["state"].get("done"))
+
+    def get_controller_state(self, instance_id: str) -> dict[str, Any] | None:
+        entry = self._instance_dict.get(instance_id)
+        if entry is None:
+            return None
+        return entry["state"]
 
     async def generate_response(self, instance_id: str, messages: list[dict[str, Any]], **kwargs) -> tuple[bool, str, float, dict[str, Any]]:
         entry = self._instance_dict.get(instance_id)
@@ -168,4 +183,41 @@ class DeltaTauBenchInteraction(BaseInteraction):
         }
 
     async def finalize_interaction(self, instance_id: str, **kwargs) -> None:
-        self._instance_dict.pop(instance_id, None)
+        entry = self._instance_dict.pop(instance_id, None)
+        if entry is None or not self.trace_dir:
+            return
+        state = entry["state"]
+        trace_id = state.get("trace_id") or instance_id
+        out_dir = Path(self.trace_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        def encode(value: Any) -> Any:
+            if is_dataclass(value):
+                return asdict(value)
+            if isinstance(value, dict):
+                return {str(key): encode(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [encode(item) for item in value]
+            return value
+
+        payload = {
+            "instance_id": instance_id,
+            "trace_id": trace_id,
+            "task_id": state.get("task_id"),
+            "done": state.get("done"),
+            "outcome_reward": 1.0 if state.get("total_reward", 0.0) >= 1.0 else 0.0,
+            "combined_reward": compute_delta_ledger_reward(state),
+            "delta_reward_sum": state.get("delta_reward_sum", 0.0),
+            "evidence_bonus_sum": state.get("evidence_bonus_sum", 0.0),
+            "num_tool_calls": state.get("num_tool_calls", 0),
+            "num_user_turns": state.get("num_user_turns", 0),
+            "trace_truncated": state.get("trace_truncated", False),
+            "action_history": encode(state.get("action_history", [])),
+            "delta_steps": encode(state.get("delta_steps", [])),
+            "ledger_steps": encode(state.get("ledger_steps", [])),
+            "adaptive_progress": encode(summarize_rollout_state(state)),
+        }
+        (out_dir / f"{trace_id}.json").write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )

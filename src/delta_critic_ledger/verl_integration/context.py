@@ -25,4 +25,5 @@ def make_initial_state(task_id: int, instance_id: str | None = None, env_id: int
         "ledger_steps": [],
         "delta_reward_sum": 0.0,
         "evidence_bonus_sum": 0.0,
+        "evidence_rewarded_goal_fields": [],
     }

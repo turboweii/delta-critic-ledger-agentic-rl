@@ -35,6 +35,7 @@ activate_env() {
   fi
   for profile in \
     "${CONDA_PROFILE:-}" \
+    "${HOME}/miniconda/etc/profile.d/conda.sh" \
     "${HOME}/miniconda3/etc/profile.d/conda.sh" \
     "/opt/conda/etc/profile.d/conda.sh"; do
     if [[ -n "${profile}" && -f "${profile}" ]]; then
@@ -111,7 +112,7 @@ start_assistant_server() {
   local served_name=${2:-delta-assistant-7b-a800-smoke}
   CUDA_DEVICES="${GPU}" MODEL_PATH="${model_path}" \
     SERVED_MODEL_NAME="${served_name}" PORT=8000 TP_SIZE=1 \
-    GPU_MEM_UTIL=${ASSISTANT_GPU_MEM_UTIL:-0.28} MAX_MODEL_LEN=8192 MAX_NUM_SEQS=1 \
+    GPU_MEM_UTIL=${ASSISTANT_GPU_MEM_UTIL:-0.28} MAX_MODEL_LEN=12288 MAX_NUM_SEQS=1 \
     bash scripts/vllm_server/start_assistant_7b.sh \
     >"${LOG_DIR}/assistant.log" 2>&1 &
   ASSISTANT_PID=$!
@@ -143,6 +144,10 @@ print(f"vLLM: {vllm.__version__}")
 print(f"veRL: {version('verl')}")
 PY
   python3 scripts/train/grpo/gen_tool_config.py --tau-bench-path "${TAU_BENCH_PATH}"
+  python3 scripts/test/check_prompt_budget.py \
+    --config configs/train/grpo/delta_ledger_grpo_1xa800_80g_smoke.yaml \
+    --model-path "${MODEL_7B}" \
+    --tau-bench-path "${TAU_BENCH_PATH}"
   python3 scripts/test/interface_audit.py \
     --grpo-config configs/train/grpo/delta_ledger_grpo_1xa800_80g_smoke.yaml \
     --expected-gpus 1
@@ -156,7 +161,7 @@ build_grpo_data() {
   }
   python3 scripts/train/grpo/build_grpo_parquet.py \
     --train-task-ids-from experiments/sft_collect_airline_a800_smoke/split.json \
-    --num-total-tasks 4 \
+    --val-task-ids-from experiments/sft_collect_airline_a800_smoke/split.json \
     --output-train experiments/grpo_airline_a800_smoke/train.parquet \
     --output-val experiments/grpo_airline_a800_smoke/val.parquet
 }
@@ -168,6 +173,7 @@ prepare_smoke_data() {
     --mode oracle \
     --output-dir experiments/sft_collect_airline_a800_smoke \
     --task-ids 0,1,2,3 \
+    --no-use-user-sim \
     --holdout-size 1 \
     --num-workers 1 \
     --overwrite
@@ -234,9 +240,24 @@ run_grpo() {
   echo "[A800 smoke] Ten-step real multi-turn Delta/Ledger GRPO with final validation"
   start_32b_server ${GRPO_USER_GPU_MEM_UTIL:-0.28} 1 4096
   mkdir -p experiments/delta_ledger_grpo_1xa800_80g_smoke outputs/grpo_delta_traces
+  ADAPTIVE_GRPO_CONTROL=${ADAPTIVE_GRPO_CONTROL:-1}
+  ADAPTIVE_OVERRIDES=()
+  if [[ "${ADAPTIVE_GRPO_CONTROL}" == "1" ]]; then
+    python3 scripts/train/grpo/adaptive_kl_entropy.py \
+      --trace-dir outputs/grpo_delta_traces \
+      --config configs/train/grpo/adaptive_kl_entropy.yaml \
+      --format summary
+    mapfile -t ADAPTIVE_OVERRIDES < <(
+      python3 scripts/train/grpo/adaptive_kl_entropy.py \
+        --trace-dir outputs/grpo_delta_traces \
+        --config configs/train/grpo/adaptive_kl_entropy.yaml \
+        --format hydra-lines
+    )
+  fi
   python -m verl.trainer.main_ppo \
     --config-path="$(pwd)/configs/train/grpo" \
-    --config-name=delta_ledger_grpo_1xa800_80g_smoke
+    --config-name=delta_ledger_grpo_1xa800_80g_smoke \
+    "${ADAPTIVE_OVERRIDES[@]}"
   cleanup_servers
   python3 scripts/train/grpo/export_grpo_checkpoint.py \
     --base-model experiments/sft_lora_a800_smoke_merged \

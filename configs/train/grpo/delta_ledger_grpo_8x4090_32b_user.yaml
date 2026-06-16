@@ -5,13 +5,13 @@ defaults:
   - _self_
 
 data:
-  train_batch_size: 4
-  max_prompt_length: 8192
-  max_response_length: 8192
+  train_batch_size: 6
+  max_prompt_length: 10240
+  max_response_length: 6144
 
 actor_rollout_ref:
   actor:
-    ppo_mini_batch_size: 4
+    ppo_mini_batch_size: 6
     ppo_micro_batch_size_per_gpu: 1
   rollout:
     n: 4

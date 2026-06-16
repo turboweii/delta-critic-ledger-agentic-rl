@@ -144,9 +144,14 @@ export PYTHONPATH=$PWD/src:/home/ubuntu/tau-bench:/home/ubuntu/verl:$PYTHONPATH
 python3 scripts/test/interface_audit.py
 python3 scripts/run_tests.py
 python3 scripts/train/grpo/gen_tool_config.py
+python3 scripts/test/check_prompt_budget.py \
+  --config configs/train/grpo/delta_ledger_grpo_8x4090_32b_user.yaml \
+  --model-path ../models/Qwen2.5-7B-Instruct \
+  --tau-bench-path ../tau-bench
 ```
 
-这三步必须先通过。
+这些检查必须先通过。prompt budget 检查使用真实 wiki、工具 schema 和 Qwen
+chat template，防止 Ray 启动后才发现上下文超限。
 
 其中：
 
@@ -714,6 +719,29 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 \
 bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
 ```
 
+默认会启用 Adaptive KL / Entropy Controller：
+
+```text
+online entropy: agent loop 根据当前 Ledger progress 调整 temperature/top_p
+trace KL: 启动前根据 outputs/grpo_delta_traces 生成有界 Hydra overrides
+```
+
+查看当前建议：
+
+```bash
+python3 scripts/train/grpo/adaptive_kl_entropy.py \
+  --trace-dir outputs/grpo_delta_traces \
+  --format summary
+```
+
+关闭该模块跑普通 Delta/Ledger GRPO baseline：
+
+```bash
+ADAPTIVE_GRPO_CONTROL=0 \
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 \
+bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
+```
+
 GRPO 配置：
 
 ```text
@@ -969,6 +997,8 @@ bash scripts/train/sft/collect_sft_teacher_8x4090.sh
 bash scripts/train/sft/run_sft_lora_8x4090.sh
 
 # Start assistant/user, then eval SFT
+MODEL_PATH=experiments/sft_lora_merged \
+SERVED_MODEL_NAME=delta-assistant-7b-sft \
 bash scripts/vllm_server/start_assistant_7b.sh
 bash scripts/vllm_server/start_user_32b_awq_8x4090.sh
 bash scripts/eval/eval_sft_airline_8x4090_32b_user.sh

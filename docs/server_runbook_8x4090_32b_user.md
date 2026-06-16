@@ -22,6 +22,10 @@ GPU plan for training:
 python3 scripts/run_tests.py
 python3 scripts/test/stress_context_isolation.py --concurrency 32
 python3 scripts/train/grpo/gen_tool_config.py
+python3 scripts/test/check_prompt_budget.py \
+  --config configs/train/grpo/delta_ledger_grpo_8x4090_32b_user.yaml \
+  --model-path ../models/Qwen2.5-7B-Instruct \
+  --tau-bench-path ../tau-bench
 ```
 
 ## SFT
@@ -98,8 +102,8 @@ Assistant:
 
 ```bash
 CUDA_DEVICES=0 \
-MODEL_PATH=../models/Qwen2.5-7B-Instruct \
-SERVED_MODEL_NAME=delta-assistant-7b \
+MODEL_PATH=experiments/sft_lora_merged \
+SERVED_MODEL_NAME=delta-assistant-7b-sft \
 PORT=8000 \
 bash scripts/vllm_server/start_assistant_7b.sh
 ```
@@ -148,6 +152,26 @@ python3 scripts/data/collect_tau_rollouts.py \
 
 ```bash
 bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
+```
+
+The GRPO launcher enables the Adaptive KL / Entropy Controller by default.
+During each rollout, the custom agent loop reads current Delta/Ledger progress
+and lightly adjusts sampling entropy. Before the run starts, the launcher also
+reads recent `outputs/grpo_delta_traces/*.json` files and applies bounded Hydra
+overrides for `actor_rollout_ref.actor.kl_loss_coef`,
+`algorithm.kl_ctrl.kl_coef`, `actor_rollout_ref.rollout.temperature`, and
+`actor_rollout_ref.rollout.top_p`. Disable this with:
+
+```bash
+ADAPTIVE_GRPO_CONTROL=0 bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
+```
+
+Inspect the current controller recommendation:
+
+```bash
+python3 scripts/train/grpo/adaptive_kl_entropy.py \
+  --trace-dir outputs/grpo_delta_traces \
+  --format summary
 ```
 
 训练结束后把 veRL LoRA checkpoint 导出为可由 vLLM 加载的 HF 模型：

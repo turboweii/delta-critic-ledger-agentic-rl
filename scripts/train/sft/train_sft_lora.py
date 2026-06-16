@@ -54,9 +54,18 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    tool_schemas = None
+    tool_config_path = cfg["data"].get("tool_config_path")
+    if tool_config_path:
+        import yaml
+
+        tool_config = yaml.safe_load((ROOT / tool_config_path).read_text(encoding="utf-8"))
+        tool_schemas = [item["tool_schema"] for item in tool_config["tools"]]
+
     train_dataset = TrajectorySFTDataset(
         ROOT / cfg["data"]["train_jsonl"],
         tokenizer=tokenizer,
+        tools=tool_schemas,
         max_length=int(cfg["data"]["max_length"]),
     )
     if len(train_dataset) == 0:
@@ -68,6 +77,7 @@ def main() -> None:
         eval_dataset = TrajectorySFTDataset(
             eval_jsonl,
             tokenizer=tokenizer,
+            tools=tool_schemas,
             max_length=int(cfg["data"]["max_length"]),
         )
         if len(eval_dataset) == 0:

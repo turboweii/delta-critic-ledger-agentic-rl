@@ -26,6 +26,36 @@ except Exception:  # pragma: no cover - only absent in standalone local tests
         return func
 
 
+def execute_tau_tool_action(env: Any, action: Any) -> tuple[str, float, bool, dict[str, Any]]:
+    """Execute a tau-bench tool without leaking oracle reward state into the rollout."""
+    is_terminal = action.name in getattr(env, "terminate_tools", [])
+    if not is_terminal:
+        step_res = env.step(action)
+        return (
+            str(getattr(step_res, "observation", "")),
+            float(getattr(step_res, "reward", 0.0)),
+            bool(getattr(step_res, "done", False)),
+            copy.deepcopy(env.data),
+        )
+
+    # tau-bench calculate_reward() resets env.data and replays oracle actions.
+    # Preserve the actual post-tool state and remove those oracle actions afterward.
+    env.actions.append(action)
+    try:
+        observation = str(env.tools_map[action.name].invoke(data=env.data, **action.kwargs))
+    except Exception as exc:
+        observation = f"Error: {exc}"
+    post_tool_data = copy.deepcopy(env.data)
+    action_count = len(env.actions)
+    try:
+        reward_result = env.calculate_reward()
+        reward = float(getattr(reward_result, "reward", 0.0))
+    finally:
+        env.data = copy.deepcopy(post_tool_data)
+        del env.actions[action_count:]
+    return observation, reward, True, post_tool_data
+
+
 class TauBenchDeltaToolBase(BaseTool):
     def __init__(self, config: dict, tool_schema: OpenAIFunctionToolSchema):
         super().__init__(config, tool_schema)
@@ -52,7 +82,7 @@ class TauBenchDeltaToolBase(BaseTool):
         before = copy.deepcopy(env.data)
         action = Action(name=self.name, kwargs=parameters)
         try:
-            step_res = env.step(action)
+            obs, inc_reward, is_done, after = execute_tau_tool_action(env, action)
         except Exception as exc:
             after = copy.deepcopy(env.data)
             obs = f"Error: {type(exc).__name__}: {exc}"
@@ -75,11 +105,6 @@ class TauBenchDeltaToolBase(BaseTool):
                 "trace_id": state.get("trace_id"),
                 "env_id": state.get("env_id"),
             }
-        after = copy.deepcopy(env.data)
-        obs = str(getattr(step_res, "observation", ""))
-        inc_reward = float(getattr(step_res, "reward", 0.0))
-        is_done = bool(getattr(step_res, "done", False))
-
         record_tool_transition(state, self.name, parameters, obs, before, after)
 
         state["total_reward"] += inc_reward

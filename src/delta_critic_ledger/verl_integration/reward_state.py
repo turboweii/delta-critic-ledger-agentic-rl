@@ -79,6 +79,15 @@ def record_tool_transition(state: dict, tool: str, parameters: dict, observation
     ledger_step.known_entities = ledger.snapshot()
 
     evidence_bonus = ledger.evidence_bonus(ledger_step)
+    if evidence_bonus > 0.0:
+        rewarded_fields = set(state.setdefault("evidence_rewarded_goal_fields", []))
+        new_goal_fields = set(delta_step.changed_goal_fields) - rewarded_fields
+        if delta_step.delta_reward <= 0.0 or not new_goal_fields:
+            # No-ops and regress/recover loops must not farm positive evidence reward.
+            evidence_bonus = 0.0
+        else:
+            rewarded_fields.update(new_goal_fields)
+            state["evidence_rewarded_goal_fields"] = sorted(rewarded_fields)
     max_trace_steps = int(state.get("max_trace_steps", 128))
     if len(state["delta_steps"]) < max_trace_steps:
         state["delta_steps"].append(delta_step)

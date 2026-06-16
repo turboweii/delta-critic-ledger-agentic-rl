@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import importlib.util
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,11 @@ def load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AssertionError(f"{path} must contain a YAML mapping.")
     return data
+
+
+def load_yaml_any(path: Path) -> Any:
+    with path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -104,6 +110,8 @@ def assert_interaction_interface(interaction_config: Path) -> None:
             raise AssertionError(f"DeltaTauBenchInteraction is missing {method}.")
         if not inspect.iscoroutinefunction(attr):
             raise AssertionError(f"DeltaTauBenchInteraction.{method} must be async.")
+    if not hasattr(DeltaTauBenchInteraction, "is_done"):
+        raise AssertionError("DeltaTauBenchInteraction is missing is_done.")
 
     gen_sig = inspect.signature(DeltaTauBenchInteraction.generate_response)
     if list(gen_sig.parameters)[:3] != ["self", "instance_id", "messages"]:
@@ -126,6 +134,7 @@ def assert_grpo_config(grpo_config: Path, expected_gpus: int) -> None:
     actor_rollout_ref = cfg.get("actor_rollout_ref", {})
     rollout = actor_rollout_ref.get("rollout", {})
     actor = actor_rollout_ref.get("actor", {})
+    data = cfg.get("data", {})
     trainer = cfg.get("trainer", {})
     algorithm = cfg.get("algorithm", {})
     multi_turn = rollout.get("multi_turn", {})
@@ -145,6 +154,14 @@ def assert_grpo_config(grpo_config: Path, expected_gpus: int) -> None:
     agent_config = ROOT / str(agent.get("agent_loop_config_path", ""))
     if not agent_config.is_file():
         raise AssertionError(f"Custom agent loop config is missing: {agent_config}")
+    agent_cfg = load_yaml_any(agent_config)
+    agent_entries = agent_cfg if isinstance(agent_cfg, list) else [agent_cfg]
+    agent_entry = next((item for item in agent_entries if item.get("name") == "tau_bench_tool_agent"), {})
+    adaptive_entropy = agent_entry.get("adaptive_entropy", {})
+    if adaptive_entropy.get("enabled") is not True:
+        raise AssertionError("tau_bench_tool_agent.adaptive_entropy.enabled should be true.")
+    if float(adaptive_entropy.get("min_temperature", 0.0)) >= float(adaptive_entropy.get("max_temperature", 0.0)):
+        raise AssertionError("adaptive entropy temperature bounds are invalid.")
     if not str(reward_function.get("path", "")).endswith("verl_integration/reward.py"):
         raise AssertionError("custom_reward_function.path must point to the Delta/Ledger reward adapter.")
     if reward_function.get("name") != "compute_score":
@@ -163,6 +180,47 @@ def assert_grpo_config(grpo_config: Path, expected_gpus: int) -> None:
         raise AssertionError(f"trainer.n_gpus_per_node must be {expected_gpus}.")
     if not actor.get("use_kl_loss", False):
         raise AssertionError("actor.use_kl_loss should be enabled for stable GRPO.")
+    train_batch_size = int(data.get("train_batch_size", 0))
+    mini_batch_size = int(actor.get("ppo_mini_batch_size", 0))
+    rollout_n = int(rollout.get("n", 1))
+    if mini_batch_size > train_batch_size:
+        raise AssertionError(
+            f"actor.ppo_mini_batch_size={mini_batch_size} exceeds data.train_batch_size={train_batch_size}."
+        )
+    if train_batch_size * rollout_n % expected_gpus != 0:
+        raise AssertionError("Expanded rollout batch must be divisible by trainer.n_gpus_per_node.")
+    if mini_batch_size * rollout_n % expected_gpus != 0:
+        raise AssertionError("Expanded PPO mini-batch must be divisible by trainer.n_gpus_per_node.")
+    required_context = int(data.get("max_prompt_length", 0)) + int(data.get("max_response_length", 0))
+    if int(rollout.get("max_model_len", required_context)) < required_context:
+        raise AssertionError("rollout.max_model_len must cover max_prompt_length + max_response_length.")
+
+    adaptive_cfg = load_yaml(ROOT / "configs/train/grpo/adaptive_kl_entropy.yaml")
+    if adaptive_cfg.get("enabled") is not True:
+        raise AssertionError("adaptive_kl_entropy.yaml should be enabled by default.")
+    if float(adaptive_cfg.get("actor_kl_loss_min", 0.0)) > float(adaptive_cfg.get("actor_kl_loss_base", 0.0)):
+        raise AssertionError("adaptive KL minimum exceeds base.")
+    if float(adaptive_cfg.get("actor_kl_loss_max", 0.0)) < float(adaptive_cfg.get("actor_kl_loss_base", 0.0)):
+        raise AssertionError("adaptive KL maximum is below base.")
+
+
+def assert_grpo_data_contract(interaction_config: Path) -> None:
+    spec = importlib.util.spec_from_file_location("build_grpo_parquet", ROOT / "scripts/train/grpo/build_grpo_parquet.py")
+    if spec is None or spec.loader is None:
+        raise AssertionError("Could not load build_grpo_parquet.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    cfg = load_yaml(interaction_config)
+    registered = {entry["name"] for entry in cfg.get("interaction", [])}
+    row = module.build_row(task_id=0, index=0, split="seen")
+    interaction_name = row["extra_info"]["interaction_kwargs"]["name"]
+    if interaction_name not in registered:
+        raise AssertionError(
+            f"GRPO parquet interaction name {interaction_name!r} is not registered in {interaction_config}."
+        )
+    if row["data_source"] != "tau_bench_airline":
+        raise AssertionError("GRPO data_source must stay tau_bench_airline for the custom reward adapter.")
 
 
 def assert_model_config(model_config: Path, expected_user_fragment: str) -> None:
@@ -199,6 +257,7 @@ def main() -> None:
 
     assert_tool_interfaces(ROOT / "configs/tool_config/tau_bench_airline_tools.yaml")
     assert_interaction_interface(ROOT / "configs/interaction_config/tau_bench_airline_delta_ledger.yaml")
+    assert_grpo_data_contract(ROOT / "configs/interaction_config/tau_bench_airline_delta_ledger.yaml")
     assert_grpo_config(grpo_config, args.expected_gpus)
     assert_model_config(ROOT / "configs/models/8x4090_qwen.yaml", "32B")
     print("interface_audit: ok")

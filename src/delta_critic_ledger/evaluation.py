@@ -8,6 +8,8 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Optional
 
+from delta_critic_ledger.prompts import tau_system_prompt
+
 
 @dataclass
 class EvalResult:
@@ -82,10 +84,7 @@ def run_single_task(env: Any, policy: OpenAICompatPolicy, task_idx: int, max_tur
     messages = [
         {
             "role": "system",
-            "content": (
-                "The current date is 2024-05-15. You are an airline service agent. "
-                "Use tools when needed and complete the user's request exactly."
-            ),
+            "content": tau_system_prompt(env.wiki),
         },
         {"role": "user", "content": str(obs.observation)},
     ]
@@ -132,11 +131,21 @@ def write_eval_report(results: list[EvalResult], output_dir: str | Path, config:
     by_task: dict[int, list[EvalResult]] = defaultdict(list)
     for result in results:
         by_task[result.task_id].append(result)
+    task_splits: dict[int, str] = {}
+    split_file = config.get("env", {}).get("split_file")
+    if split_file:
+        split_path = Path(split_file)
+        if split_path.exists():
+            split_data = json.loads(split_path.read_text(encoding="utf-8"))
+            task_splits.update({int(task_id): "seen" for task_id in split_data.get("seen_task_ids", [])})
+            task_splits.update({int(task_id): "unseen" for task_id in split_data.get("unseen_task_ids", [])})
+
     per_task = []
     for task_id, items in sorted(by_task.items()):
         successes = sum(1 for item in items if item.success)
         per_task.append({
             "task_id": task_id,
+            "split": task_splits.get(task_id, "unspecified"),
             "num_samples": len(items),
             "success_count": successes,
             "pass_at_1": successes / len(items) if items else 0.0,
@@ -150,6 +159,27 @@ def write_eval_report(results: list[EvalResult], output_dir: str | Path, config:
         sum(1 for items in by_task.values() if any(item.success for item in items)) / len(by_task)
         if by_task else 0.0
     )
+    split_metrics = {}
+    for split_name in sorted(set(task_splits.values())):
+        split_results = [result for result in results if task_splits.get(result.task_id) == split_name]
+        split_tasks = {result.task_id for result in split_results}
+        split_metrics[split_name] = {
+            "num_tasks": len(split_tasks),
+            "num_samples": len(split_results),
+            "success_rate": (
+                sum(1 for result in split_results if result.success) / len(split_results) if split_results else 0.0
+            ),
+            f"pass_at_{max_samples}": (
+                sum(
+                    1
+                    for task_id in split_tasks
+                    if any(result.success for result in split_results if result.task_id == task_id)
+                )
+                / len(split_tasks)
+                if split_tasks
+                else 0.0
+            ),
+        }
     report = {
         "success_rate": success_rate,
         "pass_at_1": pass_at_1,
@@ -158,6 +188,7 @@ def write_eval_report(results: list[EvalResult], output_dir: str | Path, config:
         "num_samples": len(results),
         "num_tasks": len(by_task),
         "avg_tool_calls": sum(r.num_tool_calls for r in results) / len(results) if results else 0.0,
+        "by_split": split_metrics,
         "per_task": per_task,
         "config": config,
         "results": [asdict(r) for r in results],

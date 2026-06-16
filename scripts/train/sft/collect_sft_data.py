@@ -13,8 +13,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from delta_critic_ledger.config import ensure_dir
 from delta_critic_ledger.evaluation import OpenAICompatPolicy
+from delta_critic_ledger.prompts import tau_system_prompt
 from delta_critic_ledger.tau_compat import create_tau_env
-
 
 def add_tau_bench_path(path: str | None) -> None:
     candidates = []
@@ -102,7 +102,7 @@ def collect_oracle_example(args: argparse.Namespace, task_id: int) -> dict[str, 
 
     env = build_env(args, task_id)
     task = env.task
-    messages: list[dict[str, Any]] = [{"role": "system", "content": env.wiki}]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": tau_system_prompt(env.wiki)}]
     if args.use_user_sim:
         reset = env.reset(task_index=task_id)
         messages.append({"role": "user", "content": str(reset.observation)})
@@ -118,8 +118,11 @@ def collect_oracle_example(args: argparse.Namespace, task_id: int) -> dict[str, 
             continue
         call_id = f"oracle_{task_id}_{tool_idx}"
         messages.append(assistant_tool_call(action, call_id))
-        step = env.step(action)
-        messages.append({"role": "tool", "tool_call_id": call_id, "name": name, "content": str(step.observation)})
+        try:
+            observation = env.tools_map[name].invoke(data=env.data, **kwargs)
+        except Exception as exc:
+            observation = f"Error: {exc}"
+        messages.append({"role": "tool", "tool_call_id": call_id, "name": name, "content": str(observation)})
         tool_idx += 1
 
     if messages[-1].get("role") != "assistant":
@@ -154,13 +157,14 @@ def run_teacher_rollout(args: argparse.Namespace, task_id: int, sample_idx: int,
     )
     policy.set_tools(env.tools_info)
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": env.wiki},
+        {"role": "system", "content": tau_system_prompt(env.wiki)},
         {"role": "user", "content": str(reset.observation)},
     ]
     reward = 0.0
     error = None
     num_tool_calls = 0
     contaminated_from_turn = None
+    terminated = False
 
     for turn in range(args.max_turns):
         if sum(len(str(m.get("content", ""))) for m in messages) > args.contamination_char_limit:
@@ -184,6 +188,7 @@ def run_teacher_rollout(args: argparse.Namespace, task_id: int, sample_idx: int,
                     })
                     reward = float(step.reward)
                     if step.done:
+                        terminated = True
                         break
             else:
                 step = env.step(Action(name=RESPOND_ACTION_NAME, kwargs={"content": assistant.get("content", "")}))
@@ -191,6 +196,8 @@ def run_teacher_rollout(args: argparse.Namespace, task_id: int, sample_idx: int,
                 if step.done:
                     break
                 messages.append({"role": "user", "content": str(step.observation)})
+            if terminated:
+                break
             if reward >= 1.0:
                 break
         except Exception as exc:

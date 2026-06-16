@@ -5,7 +5,7 @@ defaults:
 data:
   train_jsonl: "experiments/sft_collect_airline_a800_smoke/train.jsonl"
   eval_jsonl: "experiments/sft_collect_airline_a800_smoke/eval.jsonl"
-  max_length: 4096
+  max_length: 12288
 
 train:
   num_epochs: 1

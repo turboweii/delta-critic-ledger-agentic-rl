@@ -20,6 +20,17 @@ delta_t = Phi(state_after_t, target_state) - Phi(state_before_t, target_state)
 Evidence Ledger then labels whether write actions are grounded in tool-observed
 evidence, exposing parameter grounding and premature-write failures.
 
+The GRPO path also includes a conservative Adaptive KL / Entropy Controller.
+It uses the same Evidence Ledger traces to detect stalled exploration,
+bad groundedness, or high task progress:
+
+- online rollout entropy is adjusted inside the custom veRL agent loop by
+  changing `temperature` and `top_p` before assistant generations;
+- trace-based KL overrides are produced by
+  `scripts/train/grpo/adaptive_kl_entropy.py` for the next GRPO run/segment;
+- the controller is bounded by `configs/train/grpo/adaptive_kl_entropy.yaml`
+  and can be disabled with `ADAPTIVE_GRPO_CONTROL=0`.
+
 ## Project Layout
 
 ```text
@@ -63,6 +74,10 @@ pip install -r requirements-server.txt
 
 # 1. Generate veRL tool config with tau-bench schemas
 python3 scripts/train/grpo/gen_tool_config.py
+python3 scripts/test/check_prompt_budget.py \
+  --config configs/train/grpo/delta_ledger_grpo_8x4090_32b_user.yaml \
+  --model-path ../models/Qwen2.5-7B-Instruct \
+  --tau-bench-path ../tau-bench
 
 # 2. Start 32B-AWQ teacher policy and 32B-AWQ user simulator for SFT data
 bash scripts/vllm_server/start_teacher_32b_awq_8x4090.sh
@@ -75,6 +90,9 @@ bash scripts/train/sft/collect_sft_teacher_8x4090.sh
 bash scripts/train/sft/run_sft_lora_8x4090.sh
 
 # 5. Start assistant endpoint from experiments/sft_lora_merged for eval/data collection
+MODEL_PATH=experiments/sft_lora_merged \
+SERVED_MODEL_NAME=delta-assistant-7b-sft \
+PORT=8000 \
 bash scripts/vllm_server/start_assistant_7b.sh
 
 # 6. Collect real tau-bench policy rollouts with Delta/Ledger traces
@@ -84,6 +102,11 @@ python3 scripts/data/collect_tau_rollouts.py \
 
 # 7. Delta-Critic + Evidence Ledger GRPO
 bash scripts/train/grpo/run_delta_ledger_grpo_8x4090_32b_user.sh
+
+# Optional: inspect the adaptive controller decision from recent Ledger traces
+python3 scripts/train/grpo/adaptive_kl_entropy.py \
+  --trace-dir outputs/grpo_delta_traces \
+  --format summary
 
 # 8. Export veRL LoRA checkpoints to standalone HF models
 bash scripts/train/grpo/export_grpo_checkpoints.sh

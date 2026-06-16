@@ -4,6 +4,7 @@ env:
   num_tasks: 50
   num_samples_per_task: 4
   max_turns: 30
+  split_file: "experiments/sft_collect_airline/split.json"
   user_model: "Qwen/Qwen2.5-32B-Instruct-AWQ"
   user_provider: "openai"
   user_base_url: "http://localhost:8001/v1"
@@ -17,4 +18,3 @@ policy:
 
 output:
   dir: "outputs/eval_sft_airline_8x4090_32b_user"
-

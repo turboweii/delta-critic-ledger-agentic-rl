@@ -1,0 +1,22 @@
+# Offline/segmented controller for GRPO stability.
+# The agent loop handles per-rollout sampling entropy online; this config is
+# used by scripts/train/grpo/adaptive_kl_entropy.py to recommend Hydra
+# overrides for the next GRPO segment.
+
+enabled: true
+actor_kl_loss_base: 0.01
+actor_kl_loss_min: 0.003
+actor_kl_loss_max: 0.03
+algorithm_kl_base: 0.01
+algorithm_kl_min: 0.003
+algorithm_kl_max: 0.03
+temperature_base: 0.7
+temperature_min: 0.45
+temperature_max: 0.95
+top_p_base: 0.9
+top_p_min: 0.75
+top_p_max: 0.95
+progress_low: 0.15
+progress_high: 0.65
+outcome_high: 0.6
+bad_write_ratio_high: 0.30
