@@ -91,6 +91,25 @@ The main configs are:
 - `configs/train/sft/sft_airline_lora_2xa800_80g.yaml`
 - `configs/train/grpo/delta_ledger_grpo_2xa800_80g_32b_user.yaml`
 
+## Server Pipeline For 8x3090 + 32B User
+
+For an 8x3090 24GB server, use the dedicated conservative profile:
+
+```bash
+docs/server_runbook_8x3090_32b_user.md
+```
+
+Main entrypoints:
+
+```bash
+bash scripts/vllm_server/start_teacher_32b_awq_8x3090.sh
+bash scripts/vllm_server/start_user_32b_awq_8x3090.sh
+bash scripts/train/sft/collect_sft_teacher_8x3090.sh
+bash scripts/train/sft/run_sft_lora_8x3090.sh
+bash scripts/train/grpo/run_delta_ledger_grpo_8x3090_32b_user.sh
+bash scripts/train/grpo/export_grpo_checkpoints_8x3090.sh
+```
+
 ## Server Pipeline For 8x4090 + 32B User
 
 Default main model plan is in `configs/models/8x4090_qwen.yaml`:
