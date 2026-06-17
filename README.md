@@ -58,6 +58,39 @@ These local smoke tests use the lightweight fixture environment only to validate
 Delta-Critic and Evidence Ledger behavior without GPUs. The default training and
 data pipeline below uses real tau-bench.
 
+## Server Pipeline For 2xA800 80GB + 32B User
+
+For the 2xA800 80GB server, use the dedicated runbook:
+
+```bash
+docs/server_runbook_2xa800_80g.md
+```
+
+The short version is:
+
+```bash
+# GPU 1: 32B-AWQ user simulator, also reused as teacher during collection.
+CUDA_DEVICES=1 bash scripts/vllm_server/start_user_32b_awq_2xa800.sh
+
+# SFT data + SFT training.
+bash scripts/train/sft/collect_sft_teacher_2xa800.sh
+# Stop the 32B vLLM before this step; 2-GPU SFT uses both A800s.
+bash scripts/train/sft/run_sft_lora_2xa800.sh
+
+# Restart the 32B user simulator on GPU 1 before GRPO.
+CUDA_DEVICES=1 bash scripts/vllm_server/start_user_32b_awq_2xa800.sh
+CUDA_VISIBLE_DEVICES=0 bash scripts/train/grpo/run_delta_ledger_grpo_2xa800_80g_32b_user.sh
+
+# Export merged HF checkpoints before GRPO evaluation.
+bash scripts/train/grpo/export_grpo_checkpoints_2xa800.sh
+```
+
+The main configs are:
+
+- `configs/models/2xa800_80g_qwen.yaml`
+- `configs/train/sft/sft_airline_lora_2xa800_80g.yaml`
+- `configs/train/grpo/delta_ledger_grpo_2xa800_80g_32b_user.yaml`
+
 ## Server Pipeline For 8x4090 + 32B User
 
 Default main model plan is in `configs/models/8x4090_qwen.yaml`:
@@ -133,26 +166,6 @@ terminal_reward + beta_delta * state_delta + beta_evidence * ledger_bonus
 
 For low-resource fallback, keep using `configs/models/4x4090_qwen.yaml` and
 `scripts/train/grpo/run_delta_ledger_grpo_4x4090.sh`.
-
-## One-A800 End-to-End Validation
-
-Before the production 8x4090 run, one A800 80GB can validate all interfaces and
-training stages at reduced scale. Its default SFT input is deterministic oracle
-bootstrap data, so the smoke path does not require a memory-heavy teacher rollout:
-
-```bash
-bash scripts/run_a800_80g_smoke.sh preflight
-bash scripts/run_a800_80g_smoke.sh prepare
-bash scripts/run_a800_80g_smoke.sh sft
-bash scripts/run_a800_80g_smoke.sh eval-sft
-bash scripts/run_a800_80g_smoke.sh grpo
-bash scripts/run_a800_80g_smoke.sh eval-grpo
-```
-
-The GRPO and evaluation stages still use real tau-bench and the 32B-AWQ user
-simulator. `collect-real` separately checks one real 32B teacher trajectory, but
-is not part of `all`. The 8x4090 configuration remains the primary experiment.
-See `docs/server_runbook_1xa800_80g_smoke.md`.
 
 The demo writes:
 

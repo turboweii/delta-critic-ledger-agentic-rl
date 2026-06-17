@@ -1,0 +1,45 @@
+# Main server plan for 2 x NVIDIA A800 80GB.
+
+assistant:
+  model_name: "Qwen/Qwen2.5-7B-Instruct"
+  model_path: "../models/Qwen2.5-7B-Instruct"
+  served_name: "delta-assistant-7b"
+  base_url: "http://localhost:8000/v1"
+  port: 8000
+  cuda_visible_devices: "0"
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.70
+  max_model_len: 16384
+
+user:
+  model_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
+  model_path: "../models/Qwen2.5-32B-Instruct-AWQ"
+  quantization: "awq"
+  served_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
+  base_url: "http://localhost:8001/v1"
+  port: 8001
+  cuda_visible_devices: "1"
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.70
+  max_model_len: 12288
+
+teacher:
+  model_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
+  model_path: "../models/Qwen2.5-32B-Instruct-AWQ"
+  quantization: "awq"
+  served_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
+  base_url: "http://localhost:8001/v1"
+  port: 8001
+  cuda_visible_devices: "1"
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.70
+  max_model_len: 12288
+
+training:
+  cuda_visible_devices: "0,1"
+  policy_gpus: "0"
+  user_sim_gpus: "1"
+  precision: "bf16"
+  lora_rank: 16
+  lora_alpha: 32
+  gradient_checkpointing: true

@@ -1,0 +1,36 @@
+# Main GRPO config for 2 x A800 80GB with a 32B-AWQ user simulator.
+# GPU0 trains/rolls out the 7B policy; GPU1 keeps the 32B-AWQ user simulator online.
+
+defaults:
+  - delta_ledger_grpo_4x4090
+  - _self_
+
+data:
+  train_batch_size: 2
+  max_prompt_length: 10240
+  max_response_length: 6144
+
+actor_rollout_ref:
+  actor:
+    ppo_mini_batch_size: 2
+    ppo_micro_batch_size_per_gpu: 1
+  rollout:
+    n: 4
+    tensor_model_parallel_size: 1
+    max_model_len: 16384
+    max_num_batched_tokens: 12288
+    max_num_seqs: 4
+    gpu_memory_utilization: 0.32
+    log_prob_micro_batch_size_per_gpu: 1
+  ref:
+    log_prob_micro_batch_size_per_gpu: 1
+
+trainer:
+  total_epochs: 30
+  total_training_steps: 300
+  save_freq: 50
+  test_freq: 50
+  experiment_name: delta_ledger_grpo_2xa800_80g_32b_user
+  default_local_dir: experiments/delta_ledger_grpo_2xa800/checkpoints
+  n_gpus_per_node: 1
+  nnodes: 1

@@ -1,0 +1,23 @@
+defaults:
+  - sft_airline_lora_4x4090
+  - _self_
+
+data:
+  max_length: 16384
+
+train:
+  num_epochs: 3
+  per_device_batch_size: 1
+  grad_accum_steps: 16
+  lr: 1.0e-4
+  warmup_ratio: 0.05
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  logging_steps: 5
+  save_strategy: "epoch"
+  seed: 42
+
+output:
+  dir: "experiments/sft_lora_2xa800"
+  merged_dir: "experiments/sft_lora_merged"
+  manifest: "experiments/sft_lora_2xa800/checkpoint_manifest.json"

@@ -8,7 +8,7 @@ set -euo pipefail
 # Run this only after GRPO data exists and the 32B user simulator is online.
 
 CONFIG_PATH=${CONFIG_PATH:-$(pwd)/configs/train/grpo}
-CONFIG_NAME=${CONFIG_NAME:-delta_ledger_grpo_1xa800_80g_smoke}
+CONFIG_NAME=${CONFIG_NAME:-delta_ledger_grpo_2xa800_80g_32b_user}
 OUT_DIR=${OUT_DIR:-outputs/memory_profile_ab}
 STEPS=${STEPS:-3}
 INTERVAL=${INTERVAL:-1}
