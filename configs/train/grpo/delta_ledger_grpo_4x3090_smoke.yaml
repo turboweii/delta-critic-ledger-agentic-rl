@@ -1,0 +1,103 @@
+defaults:
+  - ppo_trainer
+  - _self_
+
+data:
+  train_files: experiments/grpo_airline/train.parquet
+  val_files: experiments/grpo_airline/val.parquet
+  train_batch_size: 3
+  max_prompt_length: 4096
+  max_response_length: 2048
+  return_raw_chat: true
+  tool_config_path: configs/tool_config/tau_bench_airline_tools.yaml
+
+actor_rollout_ref:
+  model:
+    path: experiments/sft_lora_merged
+    enable_gradient_checkpointing: true
+    lora_rank: 16
+    lora_alpha: 32
+    use_fused_kernels: true
+    fused_kernel_options:
+      impl_backend: torch
+    override_config:
+      attn_implementation: flash_attention_2
+  actor:
+    fsdp_config:
+      optimizer_offload: true
+      param_offload: true
+      model_dtype: bf16
+    optim:
+      lr: 5.0e-6
+    use_kl_loss: true
+    kl_loss_coef: 0.01
+    kl_loss_type: low_var_kl
+    use_fused_kernels: true
+    ppo_mini_batch_size: 3
+    ppo_micro_batch_size_per_gpu: 1
+  rollout:
+    name: vllm
+    mode: async
+    load_format: safetensors
+    layered_summon: true
+    agent:
+      default_agent_loop: tau_bench_tool_agent
+      agent_loop_config_path: configs/agent_loop/tau_bench_agent_loop.yaml
+      num_workers: 6
+    multi_turn:
+      enable: true
+      format: hermes
+      max_user_turns: 6
+      max_assistant_turns: 6
+      tool_config_path: configs/tool_config/tau_bench_airline_tools.yaml
+      interaction_config_path: configs/interaction_config/tau_bench_airline_delta_ledger_7b_user.yaml
+    n: 2
+    temperature: 0.7
+    top_p: 0.9
+    tensor_model_parallel_size: 1
+    calculate_log_probs: true
+    gpu_memory_utilization: 0.66
+    enforce_eager: true
+    free_cache_engine: true
+    max_num_seqs: 3
+    max_model_len: 6144
+    max_num_batched_tokens: 4096
+    log_prob_micro_batch_size_per_gpu: 1
+    val_kwargs:
+      n: 1
+      temperature: 0.7
+      top_p: 0.9
+  ref:
+    fsdp_config:
+      optimizer_offload: true
+      param_offload: true
+      model_dtype: bf16
+    model:
+      path: experiments/sft_lora_merged
+      override_config:
+        attn_implementation: flash_attention_2
+    log_prob_micro_batch_size_per_gpu: 1
+
+algorithm:
+  adv_estimator: grpo
+  kl_ctrl:
+    kl_coef: 0.01
+  rollout_correction:
+    bypass_mode: true
+
+custom_reward_function:
+  path: src/delta_critic_ledger/verl_integration/reward.py
+  name: compute_score
+
+trainer:
+  total_epochs: 10
+  total_training_steps: 10
+  save_freq: 5
+  test_freq: 5
+  val_before_train: false
+  default_local_dir: experiments/delta_ledger_grpo_4x3090_smoke/checkpoints
+  logger: ["console"]
+  project_name: delta-critic-ledger-agentic-rl
+  experiment_name: delta_ledger_grpo_4x3090_smoke
+  n_gpus_per_node: 3
+  nnodes: 1

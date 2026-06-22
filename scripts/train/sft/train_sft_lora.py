@@ -78,7 +78,7 @@ def main() -> None:
             eval_jsonl,
             tokenizer=tokenizer,
             tools=tool_schemas,
-            max_length=int(cfg["data"]["max_length"]),
+            max_length=int(cfg["data"].get("eval_max_length", cfg["data"]["max_length"])),
         )
         if len(eval_dataset) == 0:
             eval_dataset = None
@@ -113,6 +113,8 @@ def main() -> None:
         "report_to": [],
         "ddp_find_unused_parameters": False,
     }
+    if cfg["train"].get("use_liger_kernel", False):
+        training_kwargs["use_liger_kernel"] = True
     eval_key = "eval_strategy" if "eval_strategy" in TrainingArguments.__init__.__code__.co_varnames else "evaluation_strategy"
     training_kwargs[eval_key] = "epoch" if eval_dataset is not None else "no"
     args_train = TrainingArguments(**training_kwargs)

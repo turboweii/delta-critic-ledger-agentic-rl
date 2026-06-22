@@ -33,6 +33,10 @@ export TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
 
 mkdir -p experiments/delta_ledger_grpo_2xa800 outputs/grpo_delta_traces
 
+# Keep the installed veRL checkout compatible with the pinned vLLM/OmegaConf
+# stack. The patcher is idempotent and refuses unknown upstream layouts.
+python scripts/setup/patch_verl_vllm_compat.py
+
 ADAPTIVE_GRPO_CONTROL=${ADAPTIVE_GRPO_CONTROL:-1}
 ADAPTIVE_OVERRIDES=()
 if [[ "${ADAPTIVE_GRPO_CONTROL}" == "1" ]]; then

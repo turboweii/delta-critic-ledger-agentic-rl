@@ -124,6 +124,12 @@ CUDA_VISIBLE_DEVICES=0 \
 bash scripts/train/grpo/run_delta_ledger_grpo_2xa800_80g_32b_user.sh
 ```
 
+The launcher automatically applies the repository's idempotent veRL/vLLM
+compatibility patch before starting GRPO. It covers async request draining,
+rollout-correction configuration, and rollout-temperature propagation. If the
+installed veRL source does not match a supported layout, the launcher stops
+before training instead of silently modifying unknown code.
+
 This uses:
 
 ```bash
