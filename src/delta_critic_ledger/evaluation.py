@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 import urllib.request
+import copy
 from collections import defaultdict
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -30,21 +31,66 @@ class OpenAICompatPolicy:
         temperature: float = 0.7,
         top_p: float = 0.9,
         max_tokens: int = 2048,
+        max_context_chars: int | None = None,
     ):
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
         self.temperature = temperature
         self.top_p = top_p
         self.max_tokens = max_tokens
+        self.max_context_chars = max_context_chars
+        self.was_truncated = False
         self.tools: list[dict] = []
 
     def set_tools(self, tools: list[dict]) -> None:
         self.tools = tools
 
+    def _message_chars(self, message: dict) -> int:
+        total = len(str(message.get("content", "") or ""))
+        for tc in message.get("tool_calls") or []:
+            fn = tc.get("function", {})
+            total += len(str(fn.get("name", ""))) + len(str(fn.get("arguments", "")))
+        total += len(str(message.get("name", "") or ""))
+        total += len(str(message.get("tool_call_id", "") or ""))
+        return total
+
+    def _truncate_messages(self, messages: list[dict]) -> list[dict]:
+        self.was_truncated = False
+        if not self.max_context_chars:
+            return messages
+        if sum(self._message_chars(m) for m in messages) <= self.max_context_chars:
+            return messages
+
+        system = [copy.deepcopy(messages[0])] if messages and messages[0].get("role") == "system" else []
+        recent: list[dict] = []
+        budget = self.max_context_chars - sum(self._message_chars(m) for m in system)
+        if budget <= 0:
+            clipped = system or [copy.deepcopy(messages[0])]
+            clipped[0]["content"] = str(clipped[0].get("content", ""))[-self.max_context_chars:]
+            self.was_truncated = True
+            return clipped
+
+        for message in reversed(messages[len(system):]):
+            size = self._message_chars(message)
+            if size <= budget:
+                recent.append(copy.deepcopy(message))
+                budget -= size
+                continue
+            if not recent:
+                clipped = copy.deepcopy(message)
+                content = str(clipped.get("content", "") or "")
+                clipped["content"] = content[-max(0, budget):]
+                recent.append(clipped)
+            break
+
+        self.was_truncated = True
+        return system + list(reversed(recent))
+
     def __call__(self, messages: list[dict]) -> dict:
+        request_messages = self._truncate_messages(messages)
         payload = {
             "model": self.model_name,
-            "messages": messages,
+            "messages": request_messages,
             "temperature": self.temperature,
             "top_p": self.top_p,
             "max_tokens": self.max_tokens,

@@ -1,9 +1,0 @@
-defaults:
-  - eval_airline_delta_grpo_8x4090_32b_user
-  - _self_
-
-policy:
-  model_name: "experiments/delta_ledger_grpo_8x3090/hf_step_300"
-
-output:
-  dir: "outputs/eval_delta_grpo_airline_8x3090_32b_user"

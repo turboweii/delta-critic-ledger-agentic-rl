@@ -112,7 +112,7 @@ def run_rollout(env: Any, policy: OpenAICompatPolicy, task_id: int, max_turns: i
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Collect real tau-bench policy rollouts with Delta/Ledger traces.")
-    parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_8x4090_32b_user.yaml"))
+    parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_2xa800_32b_user.yaml"))
     parser.add_argument("--output-dir", default=str(ROOT / "experiments" / "data_airline_delta"))
     parser.add_argument("--tau-bench-path", default=None)
     parser.add_argument("--num-tasks", type=int, default=None)

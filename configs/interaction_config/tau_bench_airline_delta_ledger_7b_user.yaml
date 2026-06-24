@@ -13,7 +13,7 @@ interaction:
       delta_critic:
         beta_delta: 0.3
         beta_evidence: 0.1
-        trace_dir: "outputs/grpo_delta_traces_4x3090_smoke"
+        trace_dir: "outputs/grpo_delta_traces_2xa800"
         max_trace_steps: 64
         include_paths:
           - "reservations.*.status"

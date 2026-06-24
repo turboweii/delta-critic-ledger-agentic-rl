@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 cd "${ROOT_DIR}"
 
-CHECKPOINT_ROOT=${CHECKPOINT_ROOT:-experiments/delta_ledger_grpo_8x4090/checkpoints}
-OUTPUT_ROOT=${OUTPUT_ROOT:-experiments/delta_ledger_grpo_8x4090}
+CHECKPOINT_ROOT=${CHECKPOINT_ROOT:-experiments/delta_ledger_grpo_2xa800/checkpoints}
+OUTPUT_ROOT=${OUTPUT_ROOT:-experiments/delta_ledger_grpo_2xa800}
 BASE_MODEL=${BASE_MODEL:-experiments/sft_lora_merged}
 STEPS=${STEPS:-50,100,150,200,300}
 STRICT=${STRICT:-1}

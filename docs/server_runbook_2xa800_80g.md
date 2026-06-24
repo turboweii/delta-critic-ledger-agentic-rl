@@ -1,7 +1,6 @@
 # 2xA800 80GB Server Runbook: 7B Policy + 32B-AWQ User
 
-This runbook adapts the original 8x4090 production path to a 2xA800 80GB
-server. The layout is:
+This runbook covers the 2xA800 80GB server layout:
 
 - GPU 0: 7B policy SFT/GRPO training and assistant vLLM during evaluation.
 - GPU 1: 32B-AWQ user simulator vLLM. During SFT data collection, the same
@@ -136,7 +135,7 @@ This uses:
 configs/train/grpo/delta_ledger_grpo_2xa800_80g_32b_user.yaml
 ```
 
-The key memory changes versus the 8x4090 config are:
+The key 2xA800 memory settings are:
 
 - `trainer.n_gpus_per_node: 1`
 - `rollout.tensor_model_parallel_size: 1`

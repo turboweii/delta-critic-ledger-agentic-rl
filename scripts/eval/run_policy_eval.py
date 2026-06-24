@@ -27,7 +27,7 @@ def add_tau_bench_path() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_4x4090.yaml"))
+    parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_2xa800_32b_user.yaml"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     cfg = load_config(args.config)

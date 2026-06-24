@@ -1,6 +1,0 @@
-defaults:
-  - eval_airline_sft_8x4090_32b_user
-  - _self_
-
-output:
-  dir: "outputs/eval_sft_airline_8x3090_32b_user"

@@ -56,6 +56,6 @@ This standalone implementation includes:
 - Unit tests that do not require tau-bench or external packages.
 - Real tau-bench airline teacher-rollout SFT data collection.
 - 7B LoRA SFT and veRL multi-turn GRPO integration.
-- An 8x4090 production configuration with a 32B-AWQ user simulator.
+- A 2xA800 production configuration with a 32B-AWQ user simulator.
 - A 2xA800 80GB production-style configuration that keeps the 32B-AWQ user
   simulator on GPU 1 while GPU 0 runs 7B policy GRPO.

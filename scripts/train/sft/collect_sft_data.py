@@ -154,6 +154,7 @@ def run_teacher_rollout(args: argparse.Namespace, task_id: int, sample_idx: int,
         temperature=temperature,
         top_p=args.teacher_top_p,
         max_tokens=args.teacher_max_tokens,
+        max_context_chars=args.contamination_char_limit,
     )
     policy.set_tools(env.tools_info)
     messages: list[dict[str, Any]] = [
@@ -167,11 +168,10 @@ def run_teacher_rollout(args: argparse.Namespace, task_id: int, sample_idx: int,
     terminated = False
 
     for turn in range(args.max_turns):
-        if sum(len(str(m.get("content", ""))) for m in messages) > args.contamination_char_limit:
-            contaminated_from_turn = turn
-            break
         try:
             assistant = policy(messages)
+            if policy.was_truncated and contaminated_from_turn is None:
+                contaminated_from_turn = turn
             messages.append(assistant)
             tool_calls = assistant.get("tool_calls") or []
             if tool_calls:
@@ -334,7 +334,7 @@ def main() -> None:
     parser.add_argument("--max-turns", type=int, default=30)
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--holdout-size", type=int, default=10)
-    parser.add_argument("--contamination-char-limit", type=int, default=35000)
+    parser.add_argument("--contamination-char-limit", type=int, default=28000)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
 

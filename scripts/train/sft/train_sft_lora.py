@@ -16,7 +16,7 @@ from delta_critic_ledger.sft_dataset import AssistantOnlyCollator, TrajectorySFT
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default=str(ROOT / "configs" / "train" / "sft" / "sft_airline_lora_4x4090.yaml"))
+    parser.add_argument("--config", default=str(ROOT / "configs" / "train" / "sft" / "sft_airline_lora_2xa800_80g.yaml"))
     parser.add_argument("--model-path", default=os.environ.get("MODEL_7B", ""))
     parser.add_argument("--dry-run", action="store_true", help="Validate config and write manifest without training.")
     args = parser.parse_args()
