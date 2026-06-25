@@ -44,7 +44,7 @@ def hydra_overrides(decision) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Recommend adaptive KL/sampling overrides from Ledger traces.")
-    parser.add_argument("--trace-dir", default="outputs/grpo_delta_traces")
+    parser.add_argument("--trace-dir", default="outputs/grpo_delta_traces_2xa800")
     parser.add_argument("--config", default="configs/train/grpo/adaptive_kl_entropy.yaml")
     parser.add_argument("--window-size", type=int, default=64)
     parser.add_argument("--format", choices=["json", "summary", "hydra-lines"], default="summary")

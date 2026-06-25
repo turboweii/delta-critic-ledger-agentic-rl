@@ -24,6 +24,10 @@ def main() -> None:
     if args.model_path:
         cfg["model"]["name_or_path"] = args.model_path
 
+    os.environ.setdefault("WANDB_PROJECT", cfg["output"].get("wandb_project", "delta-critic-ledger-agentic-rl"))
+    os.environ.setdefault("WANDB_RUN_GROUP", cfg["output"].get("wandb_group", "sft"))
+    os.environ.setdefault("WANDB_JOB_TYPE", cfg["output"].get("wandb_job_type", "sft-train"))
+
     output_dir = ensure_dir(ROOT / cfg["output"]["dir"])
     manifest_path = ROOT / cfg["output"]["manifest"]
     ensure_dir(manifest_path.parent)
@@ -102,6 +106,7 @@ def main() -> None:
 
     training_kwargs = {
         "output_dir": str(output_dir),
+        "run_name": cfg["output"].get("run_name", output_dir.name),
         "num_train_epochs": float(cfg["train"]["num_epochs"]),
         "per_device_train_batch_size": int(cfg["train"]["per_device_batch_size"]),
         "gradient_accumulation_steps": int(cfg["train"]["grad_accum_steps"]),
@@ -110,7 +115,7 @@ def main() -> None:
         "logging_steps": int(cfg["train"]["logging_steps"]),
         "save_strategy": cfg["train"]["save_strategy"],
         "bf16": True,
-        "report_to": [],
+        "report_to": ["wandb"],
         "ddp_find_unused_parameters": False,
     }
     if cfg["train"].get("use_liger_kernel", False):

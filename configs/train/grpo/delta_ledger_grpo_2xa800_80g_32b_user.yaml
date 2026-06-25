@@ -98,7 +98,7 @@ trainer:
   save_freq: 50
   test_freq: 50
   default_local_dir: experiments/delta_ledger_grpo_2xa800/checkpoints
-  logger: [console]
+  logger: [console, wandb]
   project_name: delta-critic-ledger-agentic-rl
   experiment_name: delta_ledger_grpo_2xa800_80g_32b_user
   n_gpus_per_node: 1

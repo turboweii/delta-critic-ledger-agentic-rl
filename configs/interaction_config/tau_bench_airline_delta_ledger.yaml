@@ -13,8 +13,14 @@ interaction:
       delta_critic:
         beta_delta: 0.3
         beta_evidence: 0.1
-        trace_dir: "outputs/grpo_delta_traces"
+        trace_dir: "outputs/grpo_delta_traces_2xa800"
         max_trace_steps: 96
+        delta_clip_min: -1.0
+        delta_clip_max: 1.0
+        evidence_clip_min: -2.0
+        evidence_clip_max: 1.0
+        score_clip_min: -0.2
+        score_clip_max: 1.4
         include_paths:
           - "reservations.*.status"
           - "reservations.*.cabin"

@@ -116,7 +116,13 @@ bash scripts/train/grpo/run_delta_ledger_grpo_2xa800_80g_32b_user.sh
 
 The 72B teacher is not loaded during GRPO. Ordinary GRPO and improved GRPO
 experiments should use the same SFT checkpoint, 32B user endpoint, data split,
-and evaluation configuration.
+and evaluation configuration. After GRPO, run:
+
+```bash
+python3 scripts/train/grpo/calibrate_delta_ledger_reward.py --wandb
+```
+
+to verify that Delta/Ledger shaping is correlated with actual tau-bench success.
 
 ## 5. Export and Evaluate GRPO
 

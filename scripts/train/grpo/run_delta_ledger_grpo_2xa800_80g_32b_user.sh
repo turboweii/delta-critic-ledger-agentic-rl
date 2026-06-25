@@ -31,7 +31,7 @@ export VLLM_USE_V1=${VLLM_USE_V1:-1}
 export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
 export TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
 
-mkdir -p experiments/delta_ledger_grpo_2xa800 outputs/grpo_delta_traces
+mkdir -p experiments/delta_ledger_grpo_2xa800 outputs/grpo_delta_traces_2xa800
 
 # Keep the installed veRL checkout compatible with the pinned vLLM/OmegaConf
 # stack. The patcher is idempotent and refuses unknown upstream layouts.
@@ -41,12 +41,12 @@ ADAPTIVE_GRPO_CONTROL=${ADAPTIVE_GRPO_CONTROL:-1}
 ADAPTIVE_OVERRIDES=()
 if [[ "${ADAPTIVE_GRPO_CONTROL}" == "1" ]]; then
   python3 scripts/train/grpo/adaptive_kl_entropy.py \
-    --trace-dir outputs/grpo_delta_traces \
+    --trace-dir outputs/grpo_delta_traces_2xa800 \
     --config configs/train/grpo/adaptive_kl_entropy.yaml \
     --format summary
   mapfile -t ADAPTIVE_OVERRIDES < <(
     python3 scripts/train/grpo/adaptive_kl_entropy.py \
-      --trace-dir outputs/grpo_delta_traces \
+      --trace-dir outputs/grpo_delta_traces_2xa800 \
       --config configs/train/grpo/adaptive_kl_entropy.yaml \
       --format hydra-lines
   )
@@ -55,4 +55,9 @@ fi
 python -m verl.trainer.main_ppo \
   --config-path="$(pwd)/configs/train/grpo" \
   --config-name=delta_ledger_grpo_2xa800_80g_32b_user \
-  "${ADAPTIVE_OVERRIDES[@]}"
+  "${ADAPTIVE_OVERRIDES[@]}" \
+  2>&1 | tee experiments/delta_ledger_grpo_2xa800/train.log
+
+python3 scripts/train/grpo/calibrate_delta_ledger_reward.py \
+  --trace-dir outputs/grpo_delta_traces_2xa800 \
+  --wandb

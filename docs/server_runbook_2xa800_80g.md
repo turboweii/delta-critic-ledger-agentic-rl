@@ -158,7 +158,17 @@ actor_rollout_ref:
     ppo_mini_batch_size: 1
 ```
 
-## 7. Export and Evaluate GRPO Checkpoint
+## 7. Reward Calibration
+
+After a GRPO run writes traces to `outputs/grpo_delta_traces_2xa800`, check whether the dense Delta/Ledger reward is actually aligned with terminal success:
+
+```bash
+python3 scripts/train/grpo/calibrate_delta_ledger_reward.py --wandb
+```
+
+This logs summary metrics and a feature-correlation table to wandb. Treat warnings seriously: if `has_positive_delta` or `has_grounded_write` are weak or negative predictors of success, reduce `beta_delta` / `beta_evidence` before running a longer job.
+
+## 8. Export and Evaluate GRPO Checkpoint
 
 After training, export the checkpoint you want to test, for example step 300:
 

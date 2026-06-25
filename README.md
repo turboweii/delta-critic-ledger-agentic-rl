@@ -63,6 +63,9 @@ Main 2xA800 entrypoints:
     CUDA_DEVICES=1 bash scripts/vllm_server/start_user_32b_awq_2xa800.sh
     CUDA_VISIBLE_DEVICES=0 bash scripts/train/grpo/run_delta_ledger_grpo_2xa800_80g_32b_user.sh
 
+    # Check whether Delta/Ledger dense reward is empirically aligned.
+    python3 scripts/train/grpo/calibrate_delta_ledger_reward.py --wandb
+
     # Export merged HF checkpoints before GRPO evaluation.
     bash scripts/train/grpo/export_grpo_checkpoints_2xa800.sh
 
@@ -84,9 +87,19 @@ The veRL integration entrypoint is:
 
     delta_critic_ledger.verl_integration.interaction.DeltaTauBenchInteraction
 
-It computes:
+It computes a clipped conservative score:
 
-    terminal_reward + beta_delta * state_delta + beta_evidence * ledger_bonus
+    terminal_reward + beta_delta * clipped_state_delta + beta_evidence * clipped_ledger_bonus
+
+The default clipping keeps dense shaping from overpowering the terminal tau-bench reward:
+
+    delta in [-1, 1], evidence in [-2, 1], final score in [-0.2, 1.4]
+
+Reward calibration check:
+
+    python3 scripts/train/grpo/calibrate_delta_ledger_reward.py --wandb
+
+This reports point-biserial correlations between Delta/Ledger features and task success. If positive delta or grounded writes are not empirically aligned with success, reduce their weights before running long GRPO jobs.
 
 ## Current Ablations
 

@@ -16,7 +16,7 @@ from delta_critic_ledger.adaptive_control import (  # noqa: E402
 from delta_critic_ledger import Action, DeltaCritic, DeltaLedgerRunner, EvidenceLedger
 from delta_critic_ledger.mock_airline import MockAirlineTools, make_demo_data
 from delta_critic_ledger.verl_integration.context import make_initial_state
-from delta_critic_ledger.verl_integration.reward_state import record_tool_transition
+from delta_critic_ledger.verl_integration.reward_state import compute_delta_ledger_components, record_tool_transition
 from delta_critic_ledger.verl_integration.tools import execute_tau_tool_action
 
 
@@ -168,6 +168,39 @@ def test_recovered_goal_field_cannot_repeat_evidence_reward() -> None:
     assert state["evidence_bonus_sum"] == 1.0
 
 
+def test_delta_ledger_reward_components_are_clipped() -> None:
+    state = make_initial_state(task_id=0)
+    state["total_reward"] = 1.0
+    state["delta_reward_sum"] = 4.0
+    state["evidence_bonus_sum"] = 12.0
+    state["delta_reward_state"] = {
+        "beta_delta": 0.3,
+        "beta_evidence": 0.1,
+        "delta_clip_min": -1.0,
+        "delta_clip_max": 1.0,
+        "evidence_clip_min": -2.0,
+        "evidence_clip_max": 1.0,
+        "score_clip_min": -0.2,
+        "score_clip_max": 1.4,
+    }
+    components = compute_delta_ledger_components(state)
+    assert components["raw_delta_reward_sum"] == 4.0
+    assert components["delta_reward_sum"] == 1.0
+    assert components["raw_evidence_bonus_sum"] == 12.0
+    assert components["evidence_bonus_sum"] == 1.0
+    assert components["score"] == 1.4
+    assert components["score_was_clipped"] is False
+
+    state["total_reward"] = 0.0
+    state["delta_reward_sum"] = -5.0
+    state["evidence_bonus_sum"] = -20.0
+    components = compute_delta_ledger_components(state)
+    assert components["delta_reward_sum"] == -1.0
+    assert components["evidence_bonus_sum"] == -2.0
+    assert components["score"] == -0.2
+    assert components["score_was_clipped"] is True
+
+
 def test_adaptive_entropy_controller_modes() -> None:
     controller = AdaptiveEntropyController.from_config({"enabled": True})
     assert AdaptiveEntropyController.from_config(None).config.enabled is True
@@ -229,6 +262,7 @@ def main() -> None:
     test_terminal_tool_does_not_leak_oracle_state()
     test_grounded_noop_cannot_farm_evidence_reward()
     test_recovered_goal_field_cannot_repeat_evidence_reward()
+    test_delta_ledger_reward_components_are_clipped()
     test_adaptive_entropy_controller_modes()
     test_adaptive_kl_controller_recommendations()
     print("All project tests passed.")

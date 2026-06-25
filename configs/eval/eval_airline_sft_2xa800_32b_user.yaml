@@ -18,3 +18,9 @@ policy:
 
 output:
   dir: "outputs/eval_sft_airline_2xa800_32b_user"
+
+wandb:
+  project: delta-critic-ledger-agentic-rl
+  run_name: eval_sft_airline_2xa800_32b_user
+  group: sft-eval
+  job_type: eval

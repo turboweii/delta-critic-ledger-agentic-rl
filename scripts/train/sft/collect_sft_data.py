@@ -334,7 +334,7 @@ def main() -> None:
     parser.add_argument("--max-turns", type=int, default=30)
     parser.add_argument("--num-workers", type=int, default=2)
     parser.add_argument("--holdout-size", type=int, default=10)
-    parser.add_argument("--contamination-char-limit", type=int, default=28000)
+    parser.add_argument("--contamination-char-limit", type=int, default=35000)
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
 

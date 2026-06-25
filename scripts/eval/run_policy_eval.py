@@ -25,6 +25,49 @@ def add_tau_bench_path() -> None:
             return
 
 
+def log_eval_to_wandb(report: dict, cfg: dict, config_path: str) -> None:
+    wandb_cfg = cfg.get("wandb", {})
+    project = wandb_cfg.get("project", "delta-critic-ledger-agentic-rl")
+    run_name = wandb_cfg.get("run_name") or Path(cfg["output"]["dir"]).name
+    group = wandb_cfg.get("group", "eval")
+    job_type = wandb_cfg.get("job_type", "eval")
+
+    try:
+        import wandb
+    except Exception as exc:
+        raise RuntimeError("wandb is required for eval logging. Install it in the training environment.") from exc
+
+    run = wandb.init(
+        project=project,
+        name=run_name,
+        group=group,
+        job_type=job_type,
+        config={"eval_config_path": config_path, **cfg},
+    )
+    metrics = {
+        "eval/success_rate": report.get("success_rate"),
+        "eval/pass_at_1": report.get("pass_at_1"),
+        "eval/error_rate": report.get("error_rate"),
+        "eval/num_samples": report.get("num_samples"),
+        "eval/num_tasks": report.get("num_tasks"),
+        "eval/avg_tool_calls": report.get("avg_tool_calls"),
+    }
+    for split_name, split in (report.get("by_split") or {}).items():
+        for key, value in split.items():
+            metrics[f"eval/{split_name}/{key}"] = value
+    wandb.log(metrics)
+
+    per_task = report.get("per_task") or []
+    if per_task:
+        columns = sorted({key for row in per_task for key in row.keys()})
+        table = wandb.Table(columns=columns)
+        for row in per_task:
+            table.add_data(*[row.get(column) for column in columns])
+        wandb.log({"eval/per_task": table})
+
+    run.finish()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_2xa800_32b_user.yaml"))
@@ -81,6 +124,7 @@ def main() -> None:
                 f"reward={result.reward} tools={result.num_tool_calls} error={result.error}"
             )
     report = write_eval_report(results, out, cfg)
+    log_eval_to_wandb(report, cfg, args.config)
     print(
         json.dumps(
             {

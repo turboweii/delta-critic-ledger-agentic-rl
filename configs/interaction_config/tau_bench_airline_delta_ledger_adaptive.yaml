@@ -15,6 +15,12 @@ interaction:
         beta_evidence: 0.1
         trace_dir: "outputs/grpo_ablation_traces/delta_ledger_adaptive"
         max_trace_steps: 96
+        delta_clip_min: -1.0
+        delta_clip_max: 1.0
+        evidence_clip_min: -2.0
+        evidence_clip_max: 1.0
+        score_clip_min: -0.2
+        score_clip_max: 1.4
         include_paths:
           - "reservations.*.status"
           - "reservations.*.cabin"

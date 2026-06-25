@@ -38,3 +38,7 @@ output:
   dir: experiments/sft_lora_2xa800
   merged_dir: experiments/sft_lora_merged
   manifest: experiments/sft_lora_2xa800/checkpoint_manifest.json
+  run_name: sft_airline_lora_2xa800_80g
+  wandb_project: delta-critic-ledger-agentic-rl
+  wandb_group: sft
+  wandb_job_type: sft-train

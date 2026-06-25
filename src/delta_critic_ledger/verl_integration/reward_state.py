@@ -8,6 +8,14 @@ from delta_critic_ledger.delta_critic import DeltaCritic
 from delta_critic_ledger.evidence_ledger import EvidenceLedger
 
 
+def _clip(value: float, low: float | None = None, high: float | None = None) -> float:
+    if low is not None:
+        value = max(float(low), value)
+    if high is not None:
+        value = min(float(high), value)
+    return value
+
+
 def tau_action_to_local(action: Any) -> Action:
     kwargs = getattr(action, "kwargs", None)
     if kwargs is None and hasattr(action, "arguments"):
@@ -35,6 +43,12 @@ def init_delta_reward_state(
     beta_evidence: float,
     include_paths: list[str] | None = None,
     exclude_paths: list[str] | None = None,
+    delta_clip_min: float | None = -1.0,
+    delta_clip_max: float | None = 1.0,
+    evidence_clip_min: float | None = -2.0,
+    evidence_clip_max: float | None = 1.0,
+    score_clip_min: float | None = -0.2,
+    score_clip_max: float | None = 1.4,
 ) -> dict:
     initial_data = copy.deepcopy(env.data)
     target_actions: list[Action] = []
@@ -62,6 +76,12 @@ def init_delta_reward_state(
         "goal_fields": critic.goal_field_names(),
         "include_paths": include_paths or [],
         "exclude_paths": exclude_paths or [],
+        "delta_clip_min": delta_clip_min,
+        "delta_clip_max": delta_clip_max,
+        "evidence_clip_min": evidence_clip_min,
+        "evidence_clip_max": evidence_clip_max,
+        "score_clip_min": score_clip_min,
+        "score_clip_max": score_clip_max,
     }
 
 
@@ -98,11 +118,44 @@ def record_tool_transition(state: dict, tool: str, parameters: dict, observation
     state["evidence_bonus_sum"] += evidence_bonus
 
 
-def compute_delta_ledger_reward(state: dict) -> float:
+def compute_delta_ledger_components(state: dict) -> dict[str, float | bool]:
     outcome = 1.0 if state.get("total_reward", 0.0) >= 1.0 else 0.0
     reward_state = state.get("delta_reward_state") or {}
-    return (
-        outcome
-        + float(reward_state.get("beta_delta", 0.3)) * float(state.get("delta_reward_sum", 0.0))
-        + float(reward_state.get("beta_evidence", 0.1)) * float(state.get("evidence_bonus_sum", 0.0))
+    beta_delta = float(reward_state.get("beta_delta", 0.3))
+    beta_evidence = float(reward_state.get("beta_evidence", 0.1))
+    raw_delta = float(state.get("delta_reward_sum", 0.0) or 0.0)
+    raw_evidence = float(state.get("evidence_bonus_sum", 0.0) or 0.0)
+    clipped_delta = _clip(
+        raw_delta,
+        reward_state.get("delta_clip_min", -1.0),
+        reward_state.get("delta_clip_max", 1.0),
     )
+    clipped_evidence = _clip(
+        raw_evidence,
+        reward_state.get("evidence_clip_min", -2.0),
+        reward_state.get("evidence_clip_max", 1.0),
+    )
+    dense_reward = beta_delta * clipped_delta + beta_evidence * clipped_evidence
+    unclipped_score = outcome + dense_reward
+    score = _clip(
+        unclipped_score,
+        reward_state.get("score_clip_min", -0.2),
+        reward_state.get("score_clip_max", 1.4),
+    )
+    return {
+        "score": score,
+        "outcome_reward": outcome,
+        "dense_reward": dense_reward,
+        "raw_delta_reward_sum": raw_delta,
+        "delta_reward_sum": clipped_delta,
+        "raw_evidence_bonus_sum": raw_evidence,
+        "evidence_bonus_sum": clipped_evidence,
+        "beta_delta": beta_delta,
+        "beta_evidence": beta_evidence,
+        "unclipped_score": unclipped_score,
+        "score_was_clipped": score != unclipped_score,
+    }
+
+
+def compute_delta_ledger_reward(state: dict) -> float:
+    return float(compute_delta_ledger_components(state)["score"])
