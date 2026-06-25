@@ -21,6 +21,7 @@ interaction:
         evidence_clip_max: 1.0
         score_clip_min: -0.2
         score_clip_max: 1.4
+        success_floor: 1.0
         include_paths:
           - "reservations.*.status"
           - "reservations.*.cabin"

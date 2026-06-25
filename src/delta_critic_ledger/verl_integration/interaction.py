@@ -46,6 +46,7 @@ class DeltaTauBenchInteraction(BaseInteraction):
         self.evidence_clip_max = delta_cfg.get("evidence_clip_max", 1.0)
         self.score_clip_min = delta_cfg.get("score_clip_min", -0.2)
         self.score_clip_max = delta_cfg.get("score_clip_max", 1.4)
+        self.success_floor = delta_cfg.get("success_floor", 1.0)
         self.trace_dir = delta_cfg.get("trace_dir")
         self._instance_dict: dict[str, dict] = {}
 
@@ -81,6 +82,7 @@ class DeltaTauBenchInteraction(BaseInteraction):
             evidence_clip_max=self.evidence_clip_max,
             score_clip_min=self.score_clip_min,
             score_clip_max=self.score_clip_max,
+            success_floor=self.success_floor,
         )
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)

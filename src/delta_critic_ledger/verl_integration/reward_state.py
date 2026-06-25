@@ -49,6 +49,7 @@ def init_delta_reward_state(
     evidence_clip_max: float | None = 1.0,
     score_clip_min: float | None = -0.2,
     score_clip_max: float | None = 1.4,
+    success_floor: float | None = 1.0,
 ) -> dict:
     initial_data = copy.deepcopy(env.data)
     target_actions: list[Action] = []
@@ -82,6 +83,7 @@ def init_delta_reward_state(
         "evidence_clip_max": evidence_clip_max,
         "score_clip_min": score_clip_min,
         "score_clip_max": score_clip_max,
+        "success_floor": success_floor,
     }
 
 
@@ -142,6 +144,9 @@ def compute_delta_ledger_components(state: dict) -> dict[str, float | bool]:
         reward_state.get("score_clip_min", -0.2),
         reward_state.get("score_clip_max", 1.4),
     )
+    success_floor = reward_state.get("success_floor", 1.0)
+    if outcome >= 1.0 and success_floor is not None:
+        score = max(score, float(success_floor))
     return {
         "score": score,
         "outcome_reward": outcome,
