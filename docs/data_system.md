@@ -1,12 +1,8 @@
 # Data System
 
-Default real SFT collection command for the 2xA800 setup:
+SFT collection command for the 2xA800 setup (72B teacher, 32B user):
 
     bash scripts/train/sft/collect_sft_teacher_72b_user_32b_2xa800.sh
-
-Alternative 32B-teacher 2xA800 collection command:
-
-    bash scripts/train/sft/collect_sft_teacher_2xa800.sh
 
 SFT collector outputs:
 

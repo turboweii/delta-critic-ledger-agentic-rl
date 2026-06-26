@@ -1,5 +1,0 @@
-name: terminal_only
-beta_delta: 0.0
-beta_evidence: 0.0
-description: Terminal binary reward only; diagnostic traces are still emitted.
-

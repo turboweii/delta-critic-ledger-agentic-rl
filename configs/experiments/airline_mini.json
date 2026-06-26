@@ -1,7 +1,0 @@
-{
-  "name": "airline_mini",
-  "task_ids": ["cancel_reservation", "baggage_update", "flight_update"],
-  "trajectory_ids": ["successful", "wrong_write", "premature_write"],
-  "description": "Small deterministic ablation over three tau-bench-style airline tasks."
-}
-

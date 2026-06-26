@@ -1,7 +1,0 @@
-{
-  "name": "delta_ledger",
-  "beta_delta": 0.3,
-  "beta_evidence": 0.1,
-  "description": "Terminal reward plus Delta-Critic and Evidence Ledger."
-}
-

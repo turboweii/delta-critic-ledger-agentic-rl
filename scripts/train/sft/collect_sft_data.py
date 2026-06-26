@@ -325,7 +325,7 @@ def main() -> None:
     parser.add_argument("--user-model", default="Qwen/Qwen2.5-32B-Instruct-AWQ")
     parser.add_argument("--user-provider", default="openai")
     parser.add_argument("--user-base-url", default="http://localhost:8001/v1")
-    parser.add_argument("--teacher-model", default="Qwen/Qwen2.5-32B-Instruct-AWQ")
+    parser.add_argument("--teacher-model", default="Qwen/Qwen2.5-72B-Instruct-AWQ")
     parser.add_argument("--teacher-base-url", default="http://localhost:8002/v1")
     parser.add_argument("--teacher-top-p", type=float, default=0.9)
     parser.add_argument("--teacher-max-tokens", type=int, default=768)

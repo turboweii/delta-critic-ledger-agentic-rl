@@ -15,7 +15,7 @@ from delta_critic_ledger.prompts import DATE_CONTEXT, tau_system_prompt
 from delta_critic_ledger.tau_compat import create_tau_env
 
 DATA_SOURCE = "tau_bench_airline"
-INTERACTION_NAME = "tau_bench_airline_delta_ledger"
+INTERACTION_NAME = "tau_bench_airline_long_horizon"
 
 
 def parse_ids(raw: str) -> list[int]:

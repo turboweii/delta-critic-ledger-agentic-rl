@@ -10,7 +10,7 @@ def compute_score(
     extra_info: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Return the score produced by DeltaTauBenchInteraction."""
+    """Return the score produced by LongHorizonTauBenchInteraction."""
     del solution_str, ground_truth, kwargs
     if data_source != "tau_bench_airline":
         raise ValueError(f"Unsupported data source: {data_source}")

@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from delta_critic_ledger import Action
 from delta_critic_ledger.mock_airline import MockAirlineTools, make_demo_data
 from delta_critic_ledger.verl_integration.context import CURRENT_TAU_ENV, CURRENT_TAU_STATE, make_initial_state
-from delta_critic_ledger.verl_integration.reward_state import init_delta_reward_state, record_tool_transition
+from delta_critic_ledger.verl_integration.reward_state import init_long_horizon_state, record_tool_transition
 
 
 class MockEnv:
@@ -41,7 +41,7 @@ async def run_one(idx: int) -> tuple[str, float, list[str]]:
     instance_id = f"instance-{idx}"
     state = make_initial_state(idx, instance_id=instance_id, env_id=id(env))
     state["state_id"] = id(state)
-    state["delta_reward_state"] = init_delta_reward_state(env, beta_delta=0.3, beta_evidence=0.1)
+    state["long_horizon_state"] = init_long_horizon_state({})
 
     CURRENT_TAU_ENV.set(env)
     CURRENT_TAU_STATE.set(state)

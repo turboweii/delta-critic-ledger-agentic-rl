@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import uuid
-from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from delta_critic_ledger.adaptive_control import summarize_rollout_state
 from delta_critic_ledger.verl_integration.context import CURRENT_TAU_ENV, CURRENT_TAU_STATE, make_initial_state
-from delta_critic_ledger.verl_integration.reward_state import compute_delta_ledger_components, init_delta_reward_state
+from delta_critic_ledger.verl_integration.reward_state import (
+    compute_long_horizon_components,
+    ensure_long_horizon_state,
+    init_long_horizon_state,
+    mark_max_turn_hit,
+    record_final_response,
+    record_user_turn,
+)
 from delta_critic_ledger.tau_compat import create_tau_env
 
 try:
@@ -22,8 +27,30 @@ except Exception:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
-class DeltaTauBenchInteraction(BaseInteraction):
-    """veRL interaction that computes terminal + Delta-Critic + Evidence Ledger reward."""
+def _load_tool_schemas(path: str) -> dict:
+    """Load each tool's OpenAI function parameters from a tool_config yaml.
+
+    Lets reward_state do schema-driven grounding (which params are entity
+    references that must be grounded) instead of airline-specific naming.
+    Returns {} on any error so grounding silently falls back to naming heuristics.
+    """
+    try:
+        import yaml
+
+        data = yaml.safe_load(open(path))
+        schemas: dict = {}
+        for t in (data or {}).get("tools", []):
+            fn = (t.get("tool_schema") or {}).get("function") or {}
+            name = fn.get("name")
+            if name:
+                schemas[name] = fn.get("parameters") or {}
+        return schemas
+    except Exception:
+        return {}
+
+
+class LongHorizonTauBenchInteraction(BaseInteraction):
+    """veRL interaction for tau-bench with terminal reward and generic long-horizon diagnostics."""
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -34,20 +61,11 @@ class DeltaTauBenchInteraction(BaseInteraction):
         self.user_base_url = config.get("user_base_url", "http://localhost:8001/v1")
         self.task_split = config.get("task_split", "test")
         self.max_turns = int(config.get("max_turns", 24))
-        delta_cfg = config.get("delta_critic", {})
-        self.beta_delta = float(delta_cfg.get("beta_delta", 0.3))
-        self.beta_evidence = float(delta_cfg.get("beta_evidence", 0.1))
-        self.include_paths = list(delta_cfg.get("include_paths", []))
-        self.exclude_paths = list(delta_cfg.get("exclude_paths", []))
-        self.max_trace_steps = int(delta_cfg.get("max_trace_steps", 128))
-        self.delta_clip_min = delta_cfg.get("delta_clip_min", -1.0)
-        self.delta_clip_max = delta_cfg.get("delta_clip_max", 1.0)
-        self.evidence_clip_min = delta_cfg.get("evidence_clip_min", -2.0)
-        self.evidence_clip_max = delta_cfg.get("evidence_clip_max", 1.0)
-        self.score_clip_min = delta_cfg.get("score_clip_min", -0.2)
-        self.score_clip_max = delta_cfg.get("score_clip_max", 1.4)
-        self.success_floor = delta_cfg.get("success_floor", 1.0)
-        self.trace_dir = delta_cfg.get("trace_dir")
+        self.long_horizon_config = dict(config.get("long_horizon", config.get("delta_critic", {})) or {})
+        self.trace_dir = self.long_horizon_config.get("trace_dir")
+        tool_config_path = config.get("tool_config_path")
+        if tool_config_path:
+            self.long_horizon_config["tool_schemas"] = _load_tool_schemas(tool_config_path)
         self._instance_dict: dict[str, dict] = {}
 
     async def start_interaction(self, instance_id: Optional[str] = None, task_id: int = 0, **kwargs) -> str:
@@ -69,21 +87,7 @@ class DeltaTauBenchInteraction(BaseInteraction):
         initial_user_response = str(getattr(reset_result, "observation", reset_result))
         state = make_initial_state(int(task_id), instance_id=instance_id, env_id=id(env))
         state["state_id"] = id(state)
-        state["max_trace_steps"] = self.max_trace_steps
-        state["delta_reward_state"] = init_delta_reward_state(
-            env,
-            self.beta_delta,
-            self.beta_evidence,
-            include_paths=self.include_paths,
-            exclude_paths=self.exclude_paths,
-            delta_clip_min=self.delta_clip_min,
-            delta_clip_max=self.delta_clip_max,
-            evidence_clip_min=self.evidence_clip_min,
-            evidence_clip_max=self.evidence_clip_max,
-            score_clip_min=self.score_clip_min,
-            score_clip_max=self.score_clip_max,
-            success_floor=self.success_floor,
-        )
+        state["long_horizon_state"] = init_long_horizon_state(self.long_horizon_config)
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)
         self._instance_dict[instance_id] = {
@@ -124,6 +128,7 @@ class DeltaTauBenchInteraction(BaseInteraction):
             )
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)
+        ensure_long_horizon_state(state, self.long_horizon_config)
 
         assistant_content = ""
         for msg in reversed(messages):
@@ -133,53 +138,30 @@ class DeltaTauBenchInteraction(BaseInteraction):
 
         from tau_bench.types import Action, RESPOND_ACTION_NAME
 
+        record_final_response(state, assistant_content)
         try:
             step_res = env.step(Action(name=RESPOND_ACTION_NAME, kwargs={"content": assistant_content}))
         except Exception as exc:
             state["done"] = True
-            components = compute_delta_ledger_components(state)
+            components = compute_long_horizon_components(state)
             final_score = float(components["score"])
-            return True, "", final_score, {
-                "reward_mode": "delta_ledger",
-                "reward_components": components,
-                "outcome_reward": components["outcome_reward"],
-                "delta_reward_sum": components["delta_reward_sum"],
-                "raw_delta_reward_sum": components["raw_delta_reward_sum"],
-                "evidence_bonus_sum": components["evidence_bonus_sum"],
-                "raw_evidence_bonus_sum": components["raw_evidence_bonus_sum"],
-                "num_tool_calls": state["num_tool_calls"],
-                "task_id": state["task_id"],
-                "instance_id": state.get("instance_id"),
-                "trace_id": state.get("trace_id"),
-                "env_id": state.get("env_id"),
-                "state_id": state.get("state_id"),
-                "error": f"{type(exc).__name__}: {exc}",
-            }
+            return True, "", final_score, self._score_info(state, components, error=f"{type(exc).__name__}: {exc}")
+
         inc_reward = float(getattr(step_res, "reward", 0.0))
         is_done = bool(getattr(step_res, "done", False))
         state["total_reward"] += inc_reward
         state["num_user_turns"] += 1
+        record_user_turn(state)
         total_turns = state["num_user_turns"] + state["num_tool_calls"]
 
-        if is_done or total_turns >= self.max_turns:
+        if total_turns >= self.max_turns:
+            mark_max_turn_hit(state)
+
+        if is_done or state.get("done") or total_turns >= self.max_turns:
             state["done"] = True
-            components = compute_delta_ledger_components(state)
+            components = compute_long_horizon_components(state)
             final_score = float(components["score"])
-            return True, "", final_score, {
-                "reward_mode": "delta_ledger",
-                "reward_components": components,
-                "outcome_reward": components["outcome_reward"],
-                "delta_reward_sum": components["delta_reward_sum"],
-                "raw_delta_reward_sum": components["raw_delta_reward_sum"],
-                "evidence_bonus_sum": components["evidence_bonus_sum"],
-                "raw_evidence_bonus_sum": components["raw_evidence_bonus_sum"],
-                "num_tool_calls": state["num_tool_calls"],
-                "task_id": state["task_id"],
-                "instance_id": state.get("instance_id"),
-                "trace_id": state.get("trace_id"),
-                "env_id": state.get("env_id"),
-                "state_id": state.get("state_id"),
-            }
+            return True, "", final_score, self._score_info(state, components)
 
         return False, str(getattr(step_res, "observation", "")), 0.0, {
             "task_id": state["task_id"],
@@ -191,18 +173,16 @@ class DeltaTauBenchInteraction(BaseInteraction):
     async def calculate_score(self, instance_id: str, **kwargs) -> dict:
         entry = self._instance_dict.get(instance_id)
         if not entry:
-            return {"score": 0.0, "outcome_score": 0.0, "delta_score": 0.0, "evidence_score": 0.0}
+            return {"score": 0.0, "outcome_score": 0.0}
         state = entry["state"]
-        components = compute_delta_ledger_components(state)
+        components = compute_long_horizon_components(state)
         return {
             "score": components["score"],
-            "outcome_score": components["outcome_reward"],
-            "delta_score": components["delta_reward_sum"],
-            "raw_delta_score": components["raw_delta_reward_sum"],
-            "evidence_score": components["evidence_bonus_sum"],
-            "raw_evidence_score": components["raw_evidence_bonus_sum"],
+            "outcome_score": components["terminal_reward"],
             "dense_reward": components["dense_reward"],
             "reward_components": components,
+            "process_features": components.get("process_features", {}),
+            "loop_stop_reason": components.get("loop_stop_reason", ""),
             "instance_id": state.get("instance_id"),
             "trace_id": state.get("trace_id"),
         }
@@ -215,39 +195,47 @@ class DeltaTauBenchInteraction(BaseInteraction):
         trace_id = state.get("trace_id") or instance_id
         out_dir = Path(self.trace_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-
-        def encode(value: Any) -> Any:
-            if is_dataclass(value):
-                return asdict(value)
-            if isinstance(value, dict):
-                return {str(key): encode(item) for key, item in value.items()}
-            if isinstance(value, list):
-                return [encode(item) for item in value]
-            return value
-
-        components = compute_delta_ledger_components(state)
+        components = compute_long_horizon_components(state)
         payload = {
             "instance_id": instance_id,
             "trace_id": trace_id,
             "task_id": state.get("task_id"),
             "done": state.get("done"),
-            "outcome_reward": components["outcome_reward"],
+            "outcome_reward": components["terminal_reward"],
             "combined_reward": components["score"],
             "dense_reward": components["dense_reward"],
-            "delta_reward_sum": components["delta_reward_sum"],
-            "raw_delta_reward_sum": components["raw_delta_reward_sum"],
-            "evidence_bonus_sum": components["evidence_bonus_sum"],
-            "raw_evidence_bonus_sum": components["raw_evidence_bonus_sum"],
-            "reward_components": encode(components),
+            "reward_components": components,
+            "process_features": components.get("process_features", {}),
+            "loop_stop_reason": components.get("loop_stop_reason", ""),
             "num_tool_calls": state.get("num_tool_calls", 0),
             "num_user_turns": state.get("num_user_turns", 0),
             "trace_truncated": state.get("trace_truncated", False),
-            "action_history": encode(state.get("action_history", [])),
-            "delta_steps": encode(state.get("delta_steps", [])),
-            "ledger_steps": encode(state.get("ledger_steps", [])),
-            "adaptive_progress": encode(summarize_rollout_state(state)),
+            "action_history": state.get("action_history", []),
         }
         (out_dir / f"{trace_id}.json").write_text(
             json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+
+    def _score_info(self, state: dict[str, Any], components: dict[str, Any], error: str | None = None) -> dict[str, Any]:
+        info = {
+            "reward_mode": components["reward_mode"],
+            "reward_components": components,
+            "outcome_reward": components["terminal_reward"],
+            "dense_reward": components["dense_reward"],
+            "process_features": components.get("process_features", {}),
+            "loop_stop_reason": components.get("loop_stop_reason", ""),
+            "num_tool_calls": state["num_tool_calls"],
+            "task_id": state["task_id"],
+            "instance_id": state.get("instance_id"),
+            "trace_id": state.get("trace_id"),
+            "env_id": state.get("env_id"),
+            "state_id": state.get("state_id"),
+        }
+        if error:
+            info["error"] = error
+        return info
+
+
+# Backward-compatible class name for existing veRL configs.
+DeltaTauBenchInteraction = LongHorizonTauBenchInteraction

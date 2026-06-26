@@ -111,18 +111,14 @@ Stop the assistant server on GPU 0. Keep the 32B user server on GPU 1:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
-bash scripts/train/grpo/run_delta_ledger_grpo_2xa800_80g_32b_user.sh
+bash scripts/train/grpo/run_long_horizon_grpo_2xa800_80g_32b_user.sh
 ```
 
-The 72B teacher is not loaded during GRPO. Ordinary GRPO and improved GRPO
+The 72B teacher is not loaded during GRPO. GRPO
 experiments should use the same SFT checkpoint, 32B user endpoint, data split,
-and evaluation configuration. After GRPO, run:
-
-```bash
-python3 scripts/train/grpo/calibrate_delta_ledger_reward.py --wandb
-```
-
-to verify that Delta/Ledger shaping is correlated with actual tau-bench success.
+and evaluation configuration. After GRPO, inspect the Leg-1 constraint gate
+reject rate in the traces (the reward itself is terminal-outcome only; there is
+no dense shaping to validate).
 
 ## 5. Export and Evaluate GRPO
 

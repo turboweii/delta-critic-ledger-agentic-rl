@@ -1,92 +1,161 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import copy
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from delta_critic_ledger.long_horizon import (  # noqa: E402
+    LoopGuard,
+    ProcessFeatureTracker,
+    RewardEnvelope,
+    RewardEnvelopeConfig,
+    balanced_aggregation_loss,
+    normalize_advantages,
+    sequence_mean_loss,
+    should_update_group,
+    smooth_advantages,
+    token_mean_loss,
+)
+from delta_critic_ledger.long_horizon.advantage import dynamic_clip_range  # noqa: E402
+from delta_critic_ledger.verl_integration.context import make_initial_state  # noqa: E402
+from delta_critic_ledger.verl_integration.reward_state import (  # noqa: E402
+    compute_long_horizon_components,
+    init_long_horizon_state,
+    record_final_response,
+    record_tool_transition,
+)
+from delta_critic_ledger.verl_integration.tools import execute_tau_tool_action  # noqa: E402
+from delta_critic_ledger.schemas import Action  # noqa: E402
 from delta_critic_ledger.adaptive_control import (  # noqa: E402
     AdaptiveEntropyController,
     AdaptiveKlEntropyController,
     summarize_rollout_state,
 )
-from delta_critic_ledger import Action, DeltaCritic, DeltaLedgerRunner, EvidenceLedger
-from delta_critic_ledger.mock_airline import MockAirlineTools, make_demo_data
-from delta_critic_ledger.verl_integration.context import make_initial_state
-from delta_critic_ledger.verl_integration.reward_state import compute_delta_ledger_components, record_tool_transition
-from delta_critic_ledger.verl_integration.tools import execute_tau_tool_action
 
 
-def test_delta_critic_cancel() -> None:
-    tools = MockAirlineTools()
-    data = make_demo_data()
-    critic = DeltaCritic.from_target_actions(
-        data,
-        [Action("cancel_reservation", {"reservation_id": "Z7GOZK"})],
-        tools,
-    )
-    assert "reservations.Z7GOZK.status" in critic.goal_field_names()
-    assert critic.phi(data) == 0.0
-
-    after = copy.deepcopy(data)
-    tools(after, Action("cancel_reservation", {"reservation_id": "Z7GOZK"}))
-    step = critic.score_step(0, "cancel_reservation", data, after)
-    assert step.delta_reward == 1.0
-    assert step.changed_goal_fields == ["reservations.Z7GOZK.status"]
-
-
-def test_wrong_write_no_progress() -> None:
-    tools = MockAirlineTools()
-    data = make_demo_data()
-    critic = DeltaCritic.from_target_actions(data, [Action("cancel_reservation", {"reservation_id": "Z7GOZK"})], tools)
-    after = copy.deepcopy(data)
-    tools(after, Action("cancel_reservation", {"reservation_id": "BAD999"}))
-    step = critic.score_step(0, "cancel_reservation", data, after)
-    assert step.delta_reward == 0.0
-    assert not step.changed_goal_fields
+FEATURE_KEYS = [
+    "placeholder_count",
+    "duplicate_tool_args_count",
+    "tool_error_count",
+    "repeat_same_error_count",
+    "recovery_after_error_count",
+    "read_tool_diversity",
+    "write_before_read_count",
+    "early_transfer",
+    "early_final_respond",
+    "trajectory_length",
+    "schema_violation_count",
+    "empty_reasoning_count",
+    "think_loop_count",
+]
 
 
-def test_evidence_ledger_grounding() -> None:
-    tools = MockAirlineTools()
-    data = make_demo_data()
-    ledger = EvidenceLedger(seed_entities={"user_id": ["olivia_gonzalez_2305"]})
-
-    ungrounded = ledger.check_write(0, "cancel_reservation", {"reservation_id": "Z7GOZK"})
-    assert ungrounded.write_grounding_status == "ungrounded_write"
-
-    obs = tools(data, Action("get_user_details", {"user_id": "olivia_gonzalez_2305"}))
-    ledger.update_from_tool(1, "get_user_details", {"user_id": "olivia_gonzalez_2305"}, obs)
-
-    grounded = ledger.check_write(2, "cancel_reservation", {"reservation_id": "Z7GOZK"})
-    assert grounded.write_grounding_status == "evidence_grounded_write"
-
-    conflict = ledger.check_write(3, "cancel_reservation", {"reservation_id": "BAD999"})
-    assert conflict.write_grounding_status == "conflicting_write"
+def test_reward_envelope_keeps_success_above_failure() -> None:
+    envelope = RewardEnvelope(RewardEnvelopeConfig(dense_beta=1.0, success_max=1.2, failure_max=0.4))
+    failed = envelope.compute(terminal_reward=0.0, process_score=10.0)
+    success = envelope.compute(terminal_reward=1.0, process_score=-10.0)
+    assert failed["score"] == 0.4
+    assert success["score"] == 1.0
+    assert failed["score"] < success["score"]
 
 
-def test_runner_end_to_end() -> None:
-    tools = MockAirlineTools()
-    runner = DeltaLedgerRunner(
-        task_id=1,
-        initial_data=make_demo_data(),
-        target_actions=[Action("cancel_reservation", {"reservation_id": "Z7GOZK"})],
-        execute_tool=tools,
-        seed_entities={"user_id": ["olivia_gonzalez_2305"]},
-    )
-    report = runner.run([
-        Action("get_user_details", {"user_id": "olivia_gonzalez_2305"}),
-        Action("cancel_reservation", {"reservation_id": "BAD999"}),
-        Action("get_reservation_details", {"reservation_id": "Z7GOZK"}),
-        Action("cancel_reservation", {"reservation_id": "Z7GOZK"}),
-    ])
-    assert report.final_success is True
-    assert report.terminal_reward == 1.0
-    assert report.delta_reward_sum == 1.0
-    assert any(s.ledger.write_grounding_status == "conflicting_write" for s in report.steps)
-    assert any(s.ledger.write_grounding_status == "evidence_grounded_write" for s in report.steps)
+def test_process_features_are_generic() -> None:
+    tracker = ProcessFeatureTracker()
+    tracker.record_tool("update_reservation_flights", {"reservation_id": "<reservation_id>"}, "Error: missing flight")
+    tracker.record_tool("update_reservation_flights", {"reservation_id": "<reservation_id>"}, "Error: missing flight")
+    tracker.record_tool("search_direct_flight", {"origin": "SFO", "destination": "JFK"}, "Found flights")
+    features = tracker.to_dict()
+    assert features["tool_calls"] == 3
+    assert features["placeholder_args"] == 2
+    assert features["repeated_tool_args"] == 1
+    assert features["repeated_same_errors"] == 1
+    assert features["recovered_after_error"] == 1
+    assert features["read_tool_calls"] == 1
+
+
+def test_process_features_use_stable_trace_feature_names() -> None:
+    tracker = ProcessFeatureTracker()
+    tracker.record_tool("update_reservation_flights", {"reservation_id": "<reservation_id>"}, "Error: missing flight")
+    tracker.record_empty_reasoning()
+    features = tracker.to_dict()
+    for key in FEATURE_KEYS:
+        assert key in features
+    assert features["placeholder_count"] == 1
+    assert features["tool_error_count"] == 1
+    assert features["write_before_read_count"] == 1
+    assert features["empty_reasoning_count"] == 1
+
+
+def test_online_process_features_record_final_transfer_and_empty_reasoning() -> None:
+    state = make_initial_state(task_id=0)
+    state["long_horizon_state"] = init_long_horizon_state({})
+    record_final_response(state, "")
+    record_tool_transition(state, "transfer_to_human_agents", {"summary": "help"}, "Transfer successful")
+    record_tool_transition(state, "think", {"thought": ""}, "ok")
+    features = compute_long_horizon_components(state)["process_features"]
+    assert features["early_final_respond"] == 1
+    assert features["early_transfer"] == 1
+    assert features["empty_reasoning_count"] == 2
+
+
+def test_loop_guard_stops_repeated_tool_args() -> None:
+    guard = LoopGuard.from_config({"max_repeated_tool_args": 2})
+    tracker = ProcessFeatureTracker()
+    assert not guard.observe("get_user_details", {"user_id": "u1"}, "ok", tracker).should_stop
+    assert not guard.observe("get_user_details", {"user_id": "u1"}, "ok", tracker).should_stop
+    decision = guard.observe("get_user_details", {"user_id": "u1"}, "ok", tracker)
+    assert decision.should_stop is True
+    assert decision.reason == "repeated_tool_args"
+    assert tracker.to_dict()["loop_detected"] == 1
+
+
+def test_long_horizon_reward_state_records_loop_and_features() -> None:
+    state = make_initial_state(task_id=0)
+    state["long_horizon_state"] = init_long_horizon_state({"loop_guard": {"max_repeated_tool_args": 1}})
+    record_tool_transition(state, "get_user_details", {"user_id": "u1"}, "ok")
+    record_tool_transition(state, "get_user_details", {"user_id": "u1"}, "ok")
+    components = compute_long_horizon_components(state)
+    assert components["reward_mode"] == "long_horizon_terminal_envelope"
+    assert components["score"] <= 0.4
+    assert components["process_features"]["loop_detected"] == 1
+    assert components["loop_stop_reason"] == "repeated_tool_args"
+
+
+def test_advantage_smoothing_and_zero_variance() -> None:
+    adv, stats = normalize_advantages([0.0, 0.0, 0.0])
+    assert adv == [0.0, 0.0, 0.0]
+    assert stats.std == 0.0
+    smooth, stats = smooth_advantages([0.0, 1.0], running_mean=0.5, running_std=0.5, blend=0.5)
+    assert smooth[0] < 0.0 and smooth[1] > 0.0
+    assert stats.count == 2
+
+
+def test_dynamic_clip_range_adjusts_width() -> None:
+    widened = dynamic_clip_range(base_low=0.8, base_high=1.2, clip_ratio=0.5, target_clip_ratio=0.2)
+    narrowed = dynamic_clip_range(base_low=0.8, base_high=1.2, clip_ratio=0.01, target_clip_ratio=0.2)
+    assert widened.high - widened.low > narrowed.high - narrowed.low
+
+
+def test_group_filter_skips_zero_variance_and_loops() -> None:
+    assert should_update_group([0.0, 0.0, 0.0]).should_update is False
+    assert should_update_group([0.0, 1.0, 0.0]).should_update is True
+    decision = should_update_group([0.0, 1.0, 0.0], loop_rate=0.8, max_loop_rate=0.5)
+    assert decision.should_update is False
+    assert decision.reason == "loop_rate_too_high"
+
+
+def test_balanced_aggregation_reduces_sign_length_coupling() -> None:
+    token_losses = [[1.0], [1.0] * 100]
+    advantages = [1.0, -1.0]
+    token_loss = token_mean_loss(token_losses, advantages)
+    seq_loss = sequence_mean_loss(token_losses, advantages)
+    balanced = balanced_aggregation_loss(token_losses, advantages)
+    assert token_loss < -0.9
+    assert seq_loss == 0.0
+    assert balanced == 0.0
 
 
 def test_terminal_tool_does_not_leak_oracle_state() -> None:
@@ -106,8 +175,8 @@ def test_terminal_tool_does_not_leak_oracle_state() -> None:
             self.terminate_tools = ["transfer_to_human_agents"]
 
         def calculate_reward(self):
-            self.data = {"status": "oracle_target"}
-            self.actions.append(Action("oracle_write", {}))
+            self.data = {"status": "reward_reset_sideeffect"}
+            self.actions.append(Action("reward_replay_action", {}))
             return RewardResult()
 
     env = FakeEnv()
@@ -120,151 +189,34 @@ def test_terminal_tool_does_not_leak_oracle_state() -> None:
     assert [item.name for item in env.actions] == ["transfer_to_human_agents"]
 
 
-def test_grounded_noop_cannot_farm_evidence_reward() -> None:
-    tools = MockAirlineTools()
-    before = make_demo_data()
-    critic = DeltaCritic.from_target_actions(
-        before,
-        [Action("cancel_reservation", {"reservation_id": "Z7GOZK"})],
-        tools,
-    )
-    state = make_initial_state(task_id=0)
-    state["delta_reward_state"] = {
-        "critic": critic,
-        "ledger": EvidenceLedger(seed_entities={"reservation_id": ["Z7GOZK"]}),
-        "beta_delta": 0.3,
-        "beta_evidence": 0.1,
-    }
-    record_tool_transition(
-        state,
-        "cancel_reservation",
-        {"reservation_id": "Z7GOZK"},
-        "Already cancelled",
-        before,
-        copy.deepcopy(before),
-    )
-    assert state["delta_reward_sum"] == 0.0
-    assert state["evidence_bonus_sum"] == 0.0
-
-
-def test_recovered_goal_field_cannot_repeat_evidence_reward() -> None:
-    tools = MockAirlineTools()
-    initial = make_demo_data()
-    cancelled = copy.deepcopy(initial)
-    tools(cancelled, Action("cancel_reservation", {"reservation_id": "Z7GOZK"}))
-    critic = DeltaCritic(initial, cancelled)
-    state = make_initial_state(task_id=0)
-    state["delta_reward_state"] = {
-        "critic": critic,
-        "ledger": EvidenceLedger(seed_entities={"reservation_id": ["Z7GOZK"]}),
-        "beta_delta": 0.3,
-        "beta_evidence": 0.1,
-    }
-    params = {"reservation_id": "Z7GOZK"}
-    record_tool_transition(state, "cancel_reservation", params, "Cancelled", initial, cancelled)
-    record_tool_transition(state, "cancel_reservation", params, "Regressed", cancelled, initial)
-    record_tool_transition(state, "cancel_reservation", params, "Cancelled again", initial, cancelled)
-    assert state["delta_reward_sum"] == 1.0
-    assert state["evidence_bonus_sum"] == 1.0
-
-
-def test_delta_ledger_reward_components_are_clipped() -> None:
-    state = make_initial_state(task_id=0)
-    state["total_reward"] = 1.0
-    state["delta_reward_sum"] = 4.0
-    state["evidence_bonus_sum"] = 12.0
-    state["delta_reward_state"] = {
-        "beta_delta": 0.3,
-        "beta_evidence": 0.1,
-        "delta_clip_min": -1.0,
-        "delta_clip_max": 1.0,
-        "evidence_clip_min": -2.0,
-        "evidence_clip_max": 1.0,
-        "score_clip_min": -0.2,
-        "score_clip_max": 1.4,
-    }
-    components = compute_delta_ledger_components(state)
-    assert components["raw_delta_reward_sum"] == 4.0
-    assert components["delta_reward_sum"] == 1.0
-    assert components["raw_evidence_bonus_sum"] == 12.0
-    assert components["evidence_bonus_sum"] == 1.0
-    assert components["score"] == 1.4
-    assert components["score_was_clipped"] is False
-
-    state["total_reward"] = 0.0
-    state["delta_reward_sum"] = -5.0
-    state["evidence_bonus_sum"] = -20.0
-    components = compute_delta_ledger_components(state)
-    assert components["delta_reward_sum"] == -1.0
-    assert components["evidence_bonus_sum"] == -2.0
-    assert components["score"] == -0.2
-    assert components["score_was_clipped"] is True
-
-
-def test_adaptive_entropy_controller_modes() -> None:
+def test_adaptive_controllers_use_generic_process_features() -> None:
     controller = AdaptiveEntropyController.from_config({"enabled": True})
-    assert AdaptiveEntropyController.from_config(None).config.enabled is True
-    assert AdaptiveEntropyController.from_config({"enabled": False}).config.enabled is False
     base = {"temperature": 0.7, "top_p": 0.9}
-
-    stalled = make_initial_state(task_id=0)
-    stalled["num_tool_calls"] = 2
-    params, decision = controller.adjust_sampling_params(base, stalled)
-    assert decision.mode == "explore"
-    assert params["temperature"] > base["temperature"]
-
-    progressed = make_initial_state(task_id=0)
-    progressed["delta_reward_state"] = {"goal_fields": ["a", "b"]}
-    progressed["num_tool_calls"] = 2
-    progressed["delta_steps"] = [
-        {"delta_reward": 1.0, "changed_goal_fields": ["a"]},
-        {"delta_reward": 1.0, "changed_goal_fields": ["b"]},
-    ]
-    params, decision = controller.adjust_sampling_params(base, progressed)
-    assert decision.mode == "consolidate"
-    assert params["temperature"] < base["temperature"]
-
     bad = make_initial_state(task_id=0)
-    bad["num_tool_calls"] = 2
-    bad["ledger_steps"] = [
-        {"write_grounding_status": "conflicting_write"},
-        {"write_grounding_status": "evidence_grounded_write"},
-    ]
+    bad["process_features"] = {"tool_calls": 3, "tool_error_rate": 0.5, "repeat_tool_args_rate": 0.0}
     params, decision = controller.adjust_sampling_params(base, bad)
     assert decision.mode == "repair"
     assert params["temperature"] < base["temperature"]
 
-
-def test_adaptive_kl_controller_recommendations() -> None:
-    controller = AdaptiveKlEntropyController()
-
-    stalled = summarize_rollout_state({"num_tool_calls": 3, "delta_steps": [], "ledger_steps": []})
-    decision = controller.recommend(stalled)
+    stalled = summarize_rollout_state({"process_features": {"tool_calls": 3}})
+    decision = AdaptiveKlEntropyController().recommend(stalled)
     assert decision.mode == "explore"
     assert decision.actor_kl_loss_coef < 0.01
-    assert decision.temperature > 0.7
-
-    bad = summarize_rollout_state({
-        "num_tool_calls": 3,
-        "ledger_steps": [{"write_grounding_status": "ungrounded_write"}],
-    })
-    decision = controller.recommend(bad)
-    assert decision.mode == "repair"
-    assert decision.actor_kl_loss_coef > 0.01
-    assert decision.temperature < 0.7
 
 
 def main() -> None:
-    test_delta_critic_cancel()
-    test_wrong_write_no_progress()
-    test_evidence_ledger_grounding()
-    test_runner_end_to_end()
+    test_reward_envelope_keeps_success_above_failure()
+    test_process_features_are_generic()
+    test_process_features_use_stable_trace_feature_names()
+    test_online_process_features_record_final_transfer_and_empty_reasoning()
+    test_loop_guard_stops_repeated_tool_args()
+    test_long_horizon_reward_state_records_loop_and_features()
+    test_advantage_smoothing_and_zero_variance()
+    test_dynamic_clip_range_adjusts_width()
+    test_group_filter_skips_zero_variance_and_loops()
+    test_balanced_aggregation_reduces_sign_length_coupling()
     test_terminal_tool_does_not_leak_oracle_state()
-    test_grounded_noop_cannot_farm_evidence_reward()
-    test_recovered_goal_field_cannot_repeat_evidence_reward()
-    test_delta_ledger_reward_components_are_clipped()
-    test_adaptive_entropy_controller_modes()
-    test_adaptive_kl_controller_recommendations()
+    test_adaptive_controllers_use_generic_process_features()
     print("All project tests passed.")
 
 

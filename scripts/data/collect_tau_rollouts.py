@@ -17,8 +17,9 @@ from delta_critic_ledger.config import ensure_dir, load_config
 from delta_critic_ledger.evaluation import OpenAICompatPolicy, parse_tool_arguments
 from delta_critic_ledger.verl_integration.context import make_initial_state
 from delta_critic_ledger.verl_integration.reward_state import (
-    compute_delta_ledger_reward,
-    init_delta_reward_state,
+    compute_long_horizon_components,
+    compute_long_horizon_reward,
+    init_long_horizon_state,
     record_tool_transition,
 )
 
@@ -41,14 +42,7 @@ def run_rollout(env: Any, policy: OpenAICompatPolicy, task_id: int, max_turns: i
     reset = env.reset(task_index=task_id)
     policy.set_tools(env.tools_info)
     state = make_initial_state(task_id, instance_id=f"collect_{task_id}", env_id=id(env))
-    state["max_trace_steps"] = int(reward_cfg.get("max_trace_steps", 128))
-    state["delta_reward_state"] = init_delta_reward_state(
-        env,
-        beta_delta=float(reward_cfg.get("beta_delta", 0.3)),
-        beta_evidence=float(reward_cfg.get("beta_evidence", 0.1)),
-        include_paths=reward_cfg.get("include_paths", []),
-        exclude_paths=reward_cfg.get("exclude_paths", []),
-    )
+    state["long_horizon_state"] = init_long_horizon_state(reward_cfg)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": env.wiki},
         {"role": "user", "content": str(reset.observation)},
@@ -100,20 +94,20 @@ def run_rollout(env: Any, policy: OpenAICompatPolicy, task_id: int, max_turns: i
         "task_id": task_id,
         "success": reward >= 1.0,
         "terminal_reward": reward,
-        "combined_reward": compute_delta_ledger_reward(state),
+        "combined_reward": compute_long_horizon_reward(state),
+        "reward_components": compute_long_horizon_components(state),
         "num_tool_calls": state["num_tool_calls"],
         "num_user_turns": state["num_user_turns"],
         "error": error,
         "messages": messages,
-        "delta_trace": [asdict(step) for step in state.get("delta_steps", [])],
-        "ledger_trace": [asdict(step) for step in state.get("ledger_steps", [])],
+        "process_features": compute_long_horizon_components(state).get("process_features", {}),
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Collect real tau-bench policy rollouts with Delta/Ledger traces.")
+    parser = argparse.ArgumentParser(description="Collect real tau-bench policy rollouts with long-horizon process features.")
     parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_2xa800_32b_user.yaml"))
-    parser.add_argument("--output-dir", default=str(ROOT / "experiments" / "data_airline_delta"))
+    parser.add_argument("--output-dir", default=str(ROOT / "experiments" / "data_airline_long_horizon"))
     parser.add_argument("--tau-bench-path", default=None)
     parser.add_argument("--num-tasks", type=int, default=None)
     parser.add_argument("--num-samples", type=int, default=None)

@@ -21,8 +21,8 @@ python3 scripts/train/sft/collect_sft_data.py \
   --user-base-url "${USER_BASE_URL}" \
   --teacher-model "${TEACHER_MODEL}" \
   --teacher-base-url "${TEACHER_BASE_URL}" \
-  --best-of-n "${BEST_OF_N:-4}" \
-  --temperatures "${TEACHER_TEMPERATURES:-0.0,0.0,0.5,0.8}" \
+  --best-of-n "${BEST_OF_N:-8}" \
+  --temperatures "${TEACHER_TEMPERATURES:-0.0,0.0,0.5,0.5,0.8,0.8,1.0,1.0}" \
   --num-workers "${NUM_WORKERS:-1}" \
   --holdout-size 10
 

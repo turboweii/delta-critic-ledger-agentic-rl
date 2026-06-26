@@ -56,7 +56,7 @@ def execute_tau_tool_action(env: Any, action: Any) -> tuple[str, float, bool, di
     return observation, reward, True, post_tool_data
 
 
-class TauBenchDeltaToolBase(BaseTool):
+class TauBenchLongHorizonToolBase(BaseTool):
     def __init__(self, config: dict, tool_schema: OpenAIFunctionToolSchema):
         super().__init__(config, tool_schema)
 
@@ -91,7 +91,7 @@ class TauBenchDeltaToolBase(BaseTool):
             state["action_history"].append({
                 "tool": self.name,
                 "parameters": parameters,
-                "observation_preview": obs[:500],
+                "observation_preview": obs,  # full obs — grounding needs substring match of entity IDs (don't truncate)
                 "is_error": True,
                 "instance_id": state.get("instance_id"),
                 "trace_id": state.get("trace_id"),
@@ -113,7 +113,7 @@ class TauBenchDeltaToolBase(BaseTool):
         state["action_history"].append({
             "tool": self.name,
             "parameters": parameters,
-            "observation_preview": obs[:500],
+            "observation_preview": obs,  # full obs — grounding needs substring match of entity IDs (don't truncate)
             "is_error": obs.startswith("Error:"),
             "instance_id": state.get("instance_id"),
             "trace_id": state.get("trace_id"),
@@ -134,17 +134,17 @@ class TauBenchDeltaToolBase(BaseTool):
         pass
 
 
-class TauBench_book_reservation_Tool(TauBenchDeltaToolBase): pass
-class TauBench_calculate_Tool(TauBenchDeltaToolBase): pass
-class TauBench_cancel_reservation_Tool(TauBenchDeltaToolBase): pass
-class TauBench_get_reservation_details_Tool(TauBenchDeltaToolBase): pass
-class TauBench_get_user_details_Tool(TauBenchDeltaToolBase): pass
-class TauBench_list_all_airports_Tool(TauBenchDeltaToolBase): pass
-class TauBench_search_direct_flight_Tool(TauBenchDeltaToolBase): pass
-class TauBench_search_onestop_flight_Tool(TauBenchDeltaToolBase): pass
-class TauBench_send_certificate_Tool(TauBenchDeltaToolBase): pass
-class TauBench_think_Tool(TauBenchDeltaToolBase): pass
-class TauBench_transfer_to_human_agents_Tool(TauBenchDeltaToolBase): pass
-class TauBench_update_reservation_baggages_Tool(TauBenchDeltaToolBase): pass
-class TauBench_update_reservation_flights_Tool(TauBenchDeltaToolBase): pass
-class TauBench_update_reservation_passengers_Tool(TauBenchDeltaToolBase): pass
+class TauBench_book_reservation_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_calculate_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_cancel_reservation_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_get_reservation_details_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_get_user_details_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_list_all_airports_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_search_direct_flight_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_search_onestop_flight_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_send_certificate_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_think_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_transfer_to_human_agents_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_update_reservation_baggages_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_update_reservation_flights_Tool(TauBenchLongHorizonToolBase): pass
+class TauBench_update_reservation_passengers_Tool(TauBenchLongHorizonToolBase): pass

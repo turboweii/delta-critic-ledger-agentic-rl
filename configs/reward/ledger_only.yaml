@@ -1,5 +1,0 @@
-name: ledger_only
-beta_delta: 0.0
-beta_evidence: 0.1
-description: Terminal reward plus Evidence Ledger grounding bonus.
-

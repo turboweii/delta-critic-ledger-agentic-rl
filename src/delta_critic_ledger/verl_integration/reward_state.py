@@ -1,166 +1,177 @@
 from __future__ import annotations
 
-import copy
 from typing import Any
 
-from delta_critic_ledger import Action
-from delta_critic_ledger.delta_critic import DeltaCritic
-from delta_critic_ledger.evidence_ledger import EvidenceLedger
+from delta_critic_ledger.long_horizon import LoopGuard, ProcessFeatureTracker, RewardEnvelope
+from delta_critic_ledger.long_horizon.constraint_gate import (
+    ConstraintGateConfig,
+    apply_constraint_gate,
+    evaluate_constraint,
+)
+from delta_critic_ledger.long_horizon.grounded_write_verifier import (
+    count_ungrounded_writes,
+    entity_keys_from_schema,
+)
 
 
-def _clip(value: float, low: float | None = None, high: float | None = None) -> float:
-    if low is not None:
-        value = max(float(low), value)
-    if high is not None:
-        value = min(float(high), value)
-    return value
+EMPTY_REASONING_TEXT = {"", "none", "null", "n/a"}
+
+# Training step for the constraint-gate curriculum. The trainer calls
+# set_training_step(step) each iteration (server-side hook); locally it stays 0,
+# which (with warmup_steps=0 default) means the gate is always on for tests.
+_TRAIN_STEP: dict = {"value": 0}
 
 
-def tau_action_to_local(action: Any) -> Action:
-    kwargs = getattr(action, "kwargs", None)
-    if kwargs is None and hasattr(action, "arguments"):
-        kwargs = getattr(action, "arguments")
-    if kwargs is None and isinstance(action, dict):
-        kwargs = action.get("kwargs") or action.get("arguments") or {}
-        name = action.get("name")
-    else:
-        name = getattr(action, "name")
-    return Action(name=name, kwargs=dict(kwargs or {}))
+def set_training_step(step: int) -> None:
+    """Hook for the trainer to publish the current global step (curriculum)."""
+    _TRAIN_STEP["value"] = int(step)
 
 
-def execute_tau_tool_on_data(env: Any, data: dict[str, Any], action: Action) -> str:
-    if action.name not in env.tools_map:
-        return f"Error: unknown target action {action.name}"
-    try:
-        return str(env.tools_map[action.name].invoke(data=data, **action.kwargs))
-    except Exception as exc:
-        return f"Error: {type(exc).__name__}: {exc}"
+def _curriculum_enforce(gate_cfg: ConstraintGateConfig) -> bool:
+    """Whether the constraint gate is enforced this step.
+
+    ``warmup_steps > 0`` relaxes the gate for the first ``warmup_steps`` steps
+    (a naive early policy that violates everything can still learn); afterwards
+    fully on. With ``warmup_steps <= 0`` (default) it is always on.
+    """
+    if not gate_cfg.enabled:
+        return False
+    if gate_cfg.warmup_steps <= 0:
+        return True
+    return _TRAIN_STEP["value"] >= gate_cfg.warmup_steps
 
 
-def init_delta_reward_state(
-    env: Any,
-    beta_delta: float,
-    beta_evidence: float,
-    include_paths: list[str] | None = None,
-    exclude_paths: list[str] | None = None,
-    delta_clip_min: float | None = -1.0,
-    delta_clip_max: float | None = 1.0,
-    evidence_clip_min: float | None = -2.0,
-    evidence_clip_max: float | None = 1.0,
-    score_clip_min: float | None = -0.2,
-    score_clip_max: float | None = 1.4,
-    success_floor: float | None = 1.0,
-) -> dict:
-    initial_data = copy.deepcopy(env.data)
-    target_actions: list[Action] = []
-    for raw_action in env.task.actions:
-        action = tau_action_to_local(raw_action)
-        if action.name != "respond":
-            target_actions.append(action)
-
-    def executor(data: dict[str, Any], action: Action) -> str:
-        return execute_tau_tool_on_data(env, data, action)
-
-    critic = DeltaCritic.from_target_actions(
-        initial_data,
-        target_actions,
-        executor,
-        include_paths=include_paths,
-        exclude_paths=exclude_paths,
-    )
-    ledger = EvidenceLedger(seed_entities={"user_id": [getattr(env.task, "user_id", "")]})
+def init_long_horizon_state(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = config or {}
+    gate_cfg = config.get("constraint_gate") or {}
+    known_gate = {f for f in ConstraintGateConfig.__dataclass_fields__}
+    gate_kwargs = {k: v for k, v in dict(gate_cfg).items() if k in known_gate}
+    # Schema-driven grounding (domain-agnostic): precompute entity keys per tool
+    # from the OpenAI function schemas, so grounding keys off schema descriptions
+    # ("such as 'ZFA04Y'"), not airline-specific naming conventions.
+    tool_schemas = config.get("tool_schemas") or {}
+    tool_entity_keys = {
+        tool: entity_keys_from_schema(sch) for tool, sch in tool_schemas.items()
+    }
+    schema_provider = (lambda tool: tool_entity_keys.get(tool, set())) if tool_entity_keys else None
     return {
-        "critic": critic,
-        "ledger": ledger,
-        "beta_delta": float(beta_delta),
-        "beta_evidence": float(beta_evidence),
-        "goal_fields": critic.goal_field_names(),
-        "include_paths": include_paths or [],
-        "exclude_paths": exclude_paths or [],
-        "delta_clip_min": delta_clip_min,
-        "delta_clip_max": delta_clip_max,
-        "evidence_clip_min": evidence_clip_min,
-        "evidence_clip_max": evidence_clip_max,
-        "score_clip_min": score_clip_min,
-        "score_clip_max": score_clip_max,
-        "success_floor": success_floor,
+        "feature_tracker": ProcessFeatureTracker(),
+        "loop_guard": LoopGuard.from_config(config.get("loop_guard")),
+        "reward_envelope": RewardEnvelope.from_config(config.get("reward_envelope")),
+        "constraint_gate": ConstraintGateConfig(**gate_kwargs),
+        "schema_provider": schema_provider,
+        "loop_stop_reason": "",
     }
 
 
-def record_tool_transition(state: dict, tool: str, parameters: dict, observation: str, before: dict, after: dict) -> None:
-    reward_state = state.get("delta_reward_state")
-    if not reward_state:
-        return
-    step_idx = int(state.get("num_tool_calls", 0))
-    ledger = reward_state["ledger"]
-    critic = reward_state["critic"]
-
-    ledger_step = ledger.check_write(step_idx, tool, parameters)
-    delta_step = critic.score_step(step_idx, tool, before, after)
-    ledger.update_from_tool(step_idx, tool, parameters, observation)
-    ledger_step.known_entities = ledger.snapshot()
-
-    evidence_bonus = ledger.evidence_bonus(ledger_step)
-    if evidence_bonus > 0.0:
-        rewarded_fields = set(state.setdefault("evidence_rewarded_goal_fields", []))
-        new_goal_fields = set(delta_step.changed_goal_fields) - rewarded_fields
-        if delta_step.delta_reward <= 0.0 or not new_goal_fields:
-            # No-ops and regress/recover loops must not farm positive evidence reward.
-            evidence_bonus = 0.0
-        else:
-            rewarded_fields.update(new_goal_fields)
-            state["evidence_rewarded_goal_fields"] = sorted(rewarded_fields)
-    max_trace_steps = int(state.get("max_trace_steps", 128))
-    if len(state["delta_steps"]) < max_trace_steps:
-        state["delta_steps"].append(delta_step)
-        state["ledger_steps"].append(ledger_step)
-    else:
-        state["trace_truncated"] = True
-    state["delta_reward_sum"] += delta_step.delta_reward
-    state["evidence_bonus_sum"] += evidence_bonus
+def ensure_long_horizon_state(state: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, Any]:
+    if "long_horizon_state" not in state:
+        state["long_horizon_state"] = init_long_horizon_state(config)
+    return state["long_horizon_state"]
 
 
-def compute_delta_ledger_components(state: dict) -> dict[str, float | bool]:
-    outcome = 1.0 if state.get("total_reward", 0.0) >= 1.0 else 0.0
-    reward_state = state.get("delta_reward_state") or {}
-    beta_delta = float(reward_state.get("beta_delta", 0.3))
-    beta_evidence = float(reward_state.get("beta_evidence", 0.1))
-    raw_delta = float(state.get("delta_reward_sum", 0.0) or 0.0)
-    raw_evidence = float(state.get("evidence_bonus_sum", 0.0) or 0.0)
-    clipped_delta = _clip(
-        raw_delta,
-        reward_state.get("delta_clip_min", -1.0),
-        reward_state.get("delta_clip_max", 1.0),
+def record_tool_transition(
+    state: dict[str, Any],
+    tool: str,
+    parameters: dict[str, Any],
+    observation: str,
+    before: dict[str, Any] | None = None,
+    after: dict[str, Any] | None = None,
+    *,
+    schema_violation: bool = False,
+) -> dict[str, Any]:
+    del before, after
+    lh_state = ensure_long_horizon_state(state)
+    tracker: ProcessFeatureTracker = lh_state["feature_tracker"]
+    tracker.record_tool(tool, parameters, observation, schema_violation=schema_violation)
+    tool_name = (tool or "").lower()
+    if "transfer_to_human" in tool_name and (tracker.features.read_tool_calls == 0 or tracker.features.tool_calls <= 2):
+        tracker.mark_premature_transfer()
+    if tool_name.endswith("think") or tool_name == "think":
+        text = _extract_reasoning_text(parameters)
+        if _is_empty_reasoning(text):
+            tracker.record_empty_reasoning()
+    decision = lh_state["loop_guard"].observe(tool, parameters, observation, tracker=tracker)
+    if decision.should_stop:
+        state["done"] = True
+        lh_state["loop_stop_reason"] = decision.reason
+    return {"loop_stop": decision.should_stop, "loop_stop_reason": decision.reason}
+
+
+def _extract_reasoning_text(parameters: dict[str, Any]) -> str:
+    for key in ("thought", "thinking", "reasoning", "content", "text", "summary"):
+        value = parameters.get(key)
+        if value is not None:
+            return str(value)
+    if not parameters:
+        return ""
+    return " ".join(str(value) for value in parameters.values() if value is not None)
+
+
+def _is_empty_reasoning(text: str) -> bool:
+    stripped = (text or "").strip().lower()
+    return stripped in EMPTY_REASONING_TEXT or len(stripped) < 3
+
+
+def record_final_response(state: dict[str, Any], content: str) -> None:
+    """Record generic process features for a direct final response."""
+    lh_state = ensure_long_horizon_state(state)
+    tracker: ProcessFeatureTracker = lh_state["feature_tracker"]
+    if _is_empty_reasoning(content):
+        tracker.record_empty_reasoning()
+    if tracker.features.read_tool_calls == 0 and tracker.features.tool_calls == 0:
+        tracker.mark_premature_final()
+
+
+def record_user_turn(state: dict[str, Any]) -> None:
+    lh_state = ensure_long_horizon_state(state)
+    lh_state["feature_tracker"].record_user_turn()
+
+
+def mark_max_turn_hit(state: dict[str, Any]) -> None:
+    lh_state = ensure_long_horizon_state(state)
+    lh_state["feature_tracker"].mark_max_turn_hit()
+
+
+def compute_long_horizon_components(state: dict[str, Any]) -> dict[str, Any]:
+    lh_state = ensure_long_horizon_state(state)
+    tracker: ProcessFeatureTracker = lh_state["feature_tracker"]
+    envelope: RewardEnvelope = lh_state["reward_envelope"]
+    features = tracker.to_dict()
+    features["ungrounded_write_count"] = count_ungrounded_writes(
+        state.get("action_history", []),
+        schema_provider=lh_state.get("schema_provider"),
     )
-    clipped_evidence = _clip(
-        raw_evidence,
-        reward_state.get("evidence_clip_min", -2.0),
-        reward_state.get("evidence_clip_max", 1.0),
+    components = envelope.compute(
+        terminal_reward=float(state.get("total_reward", 0.0) or 0.0),
+        process_score=0.0,
     )
-    dense_reward = beta_delta * clipped_delta + beta_evidence * clipped_evidence
-    unclipped_score = outcome + dense_reward
-    score = _clip(
-        unclipped_score,
-        reward_state.get("score_clip_min", -0.2),
-        reward_state.get("score_clip_max", 1.4),
+
+    # Leg 1 — hard constraint gate: mechanically-checkable process errors
+    # (placeholder / schema / loop / max-turn stall) reject a rollout, forcing
+    # its reward into the failure band even if the env judged it a success.
+    # This is a binary constraint, not a shaped reward, so it is not hackable.
+    gate_cfg: ConstraintGateConfig = lh_state.get("constraint_gate") or ConstraintGateConfig()
+    violation = evaluate_constraint(features, gate_cfg)
+    raw_terminal = float(
+        components.get("raw_terminal_reward", components.get("terminal_reward", 0.0))
     )
-    success_floor = reward_state.get("success_floor", 1.0)
-    if outcome >= 1.0 and success_floor is not None:
-        score = max(score, float(success_floor))
-    return {
-        "score": score,
-        "outcome_reward": outcome,
-        "dense_reward": dense_reward,
-        "raw_delta_reward_sum": raw_delta,
-        "delta_reward_sum": clipped_delta,
-        "raw_evidence_bonus_sum": raw_evidence,
-        "evidence_bonus_sum": clipped_evidence,
-        "beta_delta": beta_delta,
-        "beta_evidence": beta_evidence,
-        "unclipped_score": unclipped_score,
-        "score_was_clipped": score != unclipped_score,
-    }
+    gated = apply_constraint_gate(raw_terminal, violation, enforce=_curriculum_enforce(gate_cfg))
+    if gated["rejected"]:
+        components["score"] = 0.0
+        components["success"] = False
+    components["rejected"] = gated["rejected"]
+    components["would_have_succeeded"] = gated["would_have_succeeded"]
+    components["constraint_violation"] = violation.to_dict()
+
+    components.update({
+        "reward_mode": "long_horizon_terminal_envelope",
+        "process_features": features,
+        "loop_stop_reason": lh_state.get("loop_stop_reason", ""),
+    })
+    return components
 
 
-def compute_delta_ledger_reward(state: dict) -> float:
-    return float(compute_delta_ledger_components(state)["score"])
+def compute_long_horizon_reward(state: dict[str, Any]) -> float:
+    return float(compute_long_horizon_components(state)["score"])
+
