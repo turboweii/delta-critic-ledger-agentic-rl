@@ -1,8 +1,8 @@
 # Data System
 
-SFT collection command for the 2xA800 setup (72B teacher, 32B user):
+SFT collection command for the 2xA800 setup (72B teacher, 72B user):
 
-    bash scripts/train/sft/collect_sft_teacher_72b_user_32b_2xa800.sh
+    bash scripts/train/sft/collect_sft_teacher_72b_user_72b_2xa800.sh
 
 SFT collector outputs:
 
@@ -19,7 +19,7 @@ The 2xA800 SFT setup runs 50 airline tasks, keeps only successful clean teacher 
 
 Default real tau-bench rollout command:
 
-    python3 scripts/data/collect_tau_rollouts.py       --config configs/eval/eval_airline_sft_2xa800_32b_user.yaml       --output-dir experiments/data_airline_delta
+    python3 scripts/data/collect_tau_rollouts.py       --config configs/eval/eval_airline_sft_2xa800_72b_user.yaml       --output-dir experiments/data_airline_delta
 
 Outputs:
 

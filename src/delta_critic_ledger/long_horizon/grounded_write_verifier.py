@@ -179,6 +179,7 @@ def count_ungrounded_writes(
     is_write_fn=None,
     min_value_len: int = 3,
     schema_provider=None,
+    initial_context: str | None = None,
 ) -> int:
     """Count write actions whose params are not grounded in prior observations.
 
@@ -189,16 +190,24 @@ def count_ungrounded_writes(
     truncating long observations (e.g. ``get_user_details`` returns several KB)
     drops IDs near the end and causes false ungrounded verdicts.
 
+    ``initial_context`` is prepended to the prior context (e.g. the initial user
+    message / task instruction). IDs that the task or user provides directly
+    (like ``user_id``, which the agent is told rather than reads from a tool)
+    must count as grounded — otherwise every write that carries a task-provided
+    user_id would be falsely rejected.
+
     Args:
         schema_provider: optional ``tool_name -> set(entity_param_names)``. If
             given, grounding is schema-driven (domain-agnostic); otherwise falls
             back to the ``_is_entity_key`` naming heuristic.
+        initial_context: optional text (initial user message / task instruction)
+            prepended to prior observations so task/user-provided IDs are grounded.
     """
     from .process_features import is_write_tool
 
     write_fn = is_write_fn or is_write_tool
     count = 0
-    prior_obs: list[str] = []
+    prior_obs: list[str] = [str(initial_context)] if initial_context else []
     for action in action_history or []:
         tool = str(action.get("tool", ""))
         params = action.get("parameters") or {}

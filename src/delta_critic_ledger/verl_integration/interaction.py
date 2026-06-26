@@ -88,6 +88,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
         state = make_initial_state(int(task_id), instance_id=instance_id, env_id=id(env))
         state["state_id"] = id(state)
         state["long_horizon_state"] = init_long_horizon_state(self.long_horizon_config)
+        state["initial_user_response"] = initial_user_response
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)
         self._instance_dict[instance_id] = {

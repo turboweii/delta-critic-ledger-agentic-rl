@@ -2,15 +2,15 @@
 
 The GPU allocation changes by stage:
 
-- SFT collection: GPU 0 runs the 72B-AWQ teacher; GPU 1 runs the 32B-AWQ user.
+- SFT collection: GPU 0 runs the 72B-AWQ teacher; GPU 1 runs the 72B-AWQ user.
 - SFT training: both GPUs train the 7B LoRA; stop both vLLM servers first.
-- GRPO: GPU 0 trains and rolls out the 7B policy; GPU 1 runs the 32B-AWQ user.
+- GRPO: GPU 0 trains and rolls out the 7B policy; GPU 1 runs the 72B-AWQ user.
 
 Expected local models:
 
 ```text
 ../models/Qwen2.5-7B-Instruct
-../models/Qwen2.5-32B-Instruct-AWQ
+../models/Qwen2.5-72B-Instruct-AWQ
 ../models/Qwen2.5-72B-Instruct-AWQ
 ```
 
@@ -34,7 +34,7 @@ MAX_NUM_SEQS=2 \
 bash scripts/vllm_server/start_teacher_72b_awq_2xa800.sh
 ```
 
-Start the 32B user simulator on GPU 1:
+Start the 72B user simulator on GPU 1:
 
 ```bash
 CUDA_DEVICES=1 \
@@ -43,7 +43,7 @@ TP_SIZE=1 \
 GPU_MEM_UTIL=0.70 \
 MAX_MODEL_LEN=12288 \
 MAX_NUM_SEQS=4 \
-bash scripts/vllm_server/start_user_32b_awq_2xa800.sh
+bash scripts/vllm_server/start_user_72b_awq_2xa800.sh
 ```
 
 Verify both services:
@@ -58,7 +58,7 @@ Collect successful teacher trajectories and prepare GRPO parquet data:
 ```bash
 BEST_OF_N=4 \
 NUM_WORKERS=1 \
-bash scripts/train/sft/collect_sft_teacher_72b_user_32b_2xa800.sh
+bash scripts/train/sft/collect_sft_teacher_72b_user_72b_2xa800.sh
 ```
 
 Keep `NUM_WORKERS=1` initially. The 72B endpoint is expected to be the
@@ -80,10 +80,10 @@ experiments/sft_lora_merged
 
 ## 3. Evaluate SFT
 
-Start only the 32B user simulator on GPU 1:
+Start only the 72B user simulator on GPU 1:
 
 ```bash
-CUDA_DEVICES=1 bash scripts/vllm_server/start_user_32b_awq_2xa800.sh
+CUDA_DEVICES=1 bash scripts/vllm_server/start_user_72b_awq_2xa800.sh
 ```
 
 Start the SFT assistant on GPU 0:
@@ -102,20 +102,20 @@ bash scripts/vllm_server/start_assistant_7b.sh
 Run evaluation:
 
 ```bash
-bash scripts/eval/eval_sft_airline_2xa800_32b_user.sh
+bash scripts/eval/eval_sft_airline_2xa800_72b_user.sh
 ```
 
 ## 4. Run GRPO with the 32B User
 
-Stop the assistant server on GPU 0. Keep the 32B user server on GPU 1:
+Stop the assistant server on GPU 0. Keep the 72B user server on GPU 1:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
-bash scripts/train/grpo/run_long_horizon_grpo_2xa800_80g_32b_user.sh
+bash scripts/train/grpo/run_long_horizon_grpo_2xa800_80g_72b_user.sh
 ```
 
 The 72B teacher is not loaded during GRPO. GRPO
-experiments should use the same SFT checkpoint, 32B user endpoint, data split,
+experiments should use the same SFT checkpoint, 72B user endpoint, data split,
 and evaluation configuration. After GRPO, inspect the Leg-1 constraint gate
 reject rate in the traces (the reward itself is terminal-outcome only; there is
 no dense shaping to validate).

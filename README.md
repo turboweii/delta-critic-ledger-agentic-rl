@@ -47,32 +47,32 @@ needed.
 
 Use one of the two dedicated runbooks:
 
-        docs/server_runbook_2xa800_72b_teacher_32b_user.md
+        docs/server_runbook_2xa800_72b_teacher_72b_user.md
 
 Main 2xA800 entrypoints:
 
     # User simulator on GPU 1.
-    CUDA_DEVICES=1 bash scripts/vllm_server/start_user_32b_awq_2xa800.sh
+    CUDA_DEVICES=1 bash scripts/vllm_server/start_user_72b_awq_2xa800.sh
     # Optional 72B teacher on GPU 0 for SFT collection.
     CUDA_DEVICES=0 bash scripts/vllm_server/start_teacher_72b_awq_2xa800.sh
     # SFT data collection (72B-teacher / 32B-user setup).
-    bash scripts/train/sft/collect_sft_teacher_72b_user_32b_2xa800.sh
+    bash scripts/train/sft/collect_sft_teacher_72b_user_72b_2xa800.sh
     # Stop vLLM servers before SFT; 2-GPU SFT uses both A800s.
     bash scripts/train/sft/run_sft_lora_2xa800.sh
-    # Restart the 32B user simulator on GPU 1 before GRPO.
-    CUDA_DEVICES=1 bash scripts/vllm_server/start_user_32b_awq_2xa800.sh
-    CUDA_VISIBLE_DEVICES=0 bash scripts/train/grpo/run_long_horizon_grpo_2xa800_80g_32b_user.sh
+    # Restart the 72B user simulator on GPU 1 before GRPO.
+    CUDA_DEVICES=1 bash scripts/vllm_server/start_user_72b_awq_2xa800.sh
+    CUDA_VISIBLE_DEVICES=0 bash scripts/train/grpo/run_long_horizon_grpo_2xa800_80g_72b_user.sh
     # Export merged HF checkpoints before evaluation.
     bash scripts/train/grpo/export_grpo_checkpoints_2xa800.sh
     # Evaluation.
-    bash scripts/eval/eval_sft_airline_2xa800_32b_user.sh
+    bash scripts/eval/eval_sft_airline_2xa800_72b_user.sh
 
 Main configs:
 
 - configs/models/2xa800_80g_qwen_72b_teacher.yaml
 - configs/train/sft/sft_airline_lora_2xa800_80g.yaml
-- configs/train/grpo/long_horizon_grpo_2xa800_80g_32b_user.yaml
-- configs/eval/eval_airline_sft_2xa800_32b_user.yaml
+- configs/train/grpo/long_horizon_grpo_2xa800_80g_72b_user.yaml
+- configs/eval/eval_airline_sft_2xa800_72b_user.yaml
 
 The veRL integration entrypoint is:
 

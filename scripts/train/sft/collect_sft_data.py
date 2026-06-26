@@ -322,7 +322,7 @@ def main() -> None:
     parser.add_argument("--task-ids", default=None)
     parser.add_argument("--use-user-sim", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--user-strategy", default="llm")
-    parser.add_argument("--user-model", default="Qwen/Qwen2.5-32B-Instruct-AWQ")
+    parser.add_argument("--user-model", default="Qwen/Qwen2.5-72B-Instruct-AWQ")
     parser.add_argument("--user-provider", default="openai")
     parser.add_argument("--user-base-url", default="http://localhost:8001/v1")
     parser.add_argument("--teacher-model", default="Qwen/Qwen2.5-72B-Instruct-AWQ")

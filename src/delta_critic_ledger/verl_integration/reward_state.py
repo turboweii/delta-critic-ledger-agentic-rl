@@ -141,6 +141,7 @@ def compute_long_horizon_components(state: dict[str, Any]) -> dict[str, Any]:
     features["ungrounded_write_count"] = count_ungrounded_writes(
         state.get("action_history", []),
         schema_provider=lh_state.get("schema_provider"),
+        initial_context=state.get("initial_user_response"),
     )
     components = envelope.compute(
         terminal_reward=float(state.get("total_reward", 0.0) or 0.0),

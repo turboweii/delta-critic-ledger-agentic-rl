@@ -64,7 +64,7 @@ fi
 
 python -m verl.trainer.main_ppo \
   --config-path="$(pwd)/configs/train/grpo" \
-  --config-name=long_horizon_grpo_2xa800_80g_32b_user \
+  --config-name=long_horizon_grpo_2xa800_80g_72b_user \
   "${ADAPTIVE_OVERRIDES[@]}" \
   2>&1 | tee experiments/long_horizon_grpo_2xa800/train.log
 

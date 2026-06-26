@@ -1,5 +1,5 @@
 experiment_name: long_horizon_checkpoint_eval
-base_config: configs/eval/eval_airline_delta_grpo_2xa800_32b_user.yaml
+base_config: configs/eval/eval_airline_delta_grpo_2xa800_72b_user.yaml
 checkpoints:
   - step: 50
     model_name: experiments/long_horizon_grpo_2xa800/hf_step_50

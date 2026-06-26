@@ -12,10 +12,10 @@ assistant:
   max_model_len: 16384
 
 user:
-  model_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
-  model_path: "../models/Qwen2.5-32B-Instruct-AWQ"
+  model_name: "Qwen/Qwen2.5-72B-Instruct-AWQ"
+  model_path: "../models/Qwen2.5-72B-Instruct-AWQ"
   quantization: "awq"
-  served_name: "Qwen/Qwen2.5-32B-Instruct-AWQ"
+  served_name: "Qwen/Qwen2.5-72B-Instruct-AWQ"
   base_url: "http://localhost:8001/v1"
   port: 8001
   cuda_visible_devices: "1"

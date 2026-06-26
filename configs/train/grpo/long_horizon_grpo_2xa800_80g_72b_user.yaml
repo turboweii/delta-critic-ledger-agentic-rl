@@ -1,5 +1,5 @@
-# Main GRPO config for 2 x A800 80GB with a 32B-AWQ user simulator.
-# GPU0 trains/rolls out the 7B policy; GPU1 keeps the 32B-AWQ user simulator online.
+# Main GRPO config for 2 x A800 80GB with a 72B-AWQ user simulator.
+# GPU0 trains/rolls out the 7B policy; GPU1 keeps the 72B-AWQ user simulator online.
 
 hydra:
   searchpath:
@@ -102,7 +102,7 @@ trainer:
   default_local_dir: experiments/long_horizon_grpo_2xa800/checkpoints
   logger: [console, wandb]
   project_name: delta-critic-ledger-agentic-rl
-  experiment_name: long_horizon_grpo_2xa800_80g_32b_user
+  experiment_name: long_horizon_grpo_2xa800_80g_72b_user
   n_gpus_per_node: 1
   nnodes: 1
 

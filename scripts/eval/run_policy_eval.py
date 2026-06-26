@@ -70,7 +70,7 @@ def log_eval_to_wandb(report: dict, cfg: dict, config_path: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_2xa800_32b_user.yaml"))
+    parser.add_argument("--config", default=str(ROOT / "configs" / "eval" / "eval_airline_sft_2xa800_72b_user.yaml"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     cfg = load_config(args.config)

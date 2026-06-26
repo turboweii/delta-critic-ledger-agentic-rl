@@ -139,14 +139,21 @@ credit 守恒(只改分布,不改来源/粒度)。
     显存注意:max_model_len 24576 + n=8,GPU0 同时训练+rollout+logprob,`gpu_memory_utilization`
     0.32 可能要调 0.4+,OOM 则 `max_model_len` 回 20480(prompt 10240+response 8192)。
 12. **SFT 收集配置**(对齐参考项目,它出了 67 条=train 45+holdout 22):
-    `collect_sft_teacher_72b_user_32b_2xa800.sh` 用 **best-of-n=8**(temperatures
-    `0,0,0.5,0.5,0.8,0.8,1.0,1.0`,成对;sh 原本是 best-of-4 已改 8)、50 airline task
-    (test split)、72B teacher + 32B user sim、`--holdout-size 10`、
-    `--contamination-char-limit 35000`。预计 ~80-150 条成功 trajectory。
+    `collect_sft_teacher_72b_user_72b_2xa800.sh` 用 **best-of-n=16**(temperatures
+    `0,0,0,0,0.5,0.5,0.5,0.5,0.8,0.8,0.8,0.8,1.0,1.0,1.0,1.0`,4 温度×4;对齐参考)、
+    `num_workers=4`、50 airline task(test split)、72B teacher + 72B user sim、
+    `--holdout-size 10`、`--contamination-char-limit 35000`。预计 ~67 条(对齐参考)。
     **contamination 35000 够**(实测参考 trajectory 最长 21233、中位 10116,0 条超 35000;
     之前担心"长 task 被丢"是错判,已收回)。**别改回 best-of-4**(数据量不够)。
     体检指标看 `summary.json`:`total_contaminated_trajectories` 占比、`task_coverage_rate`
     (低说明 teacher 弱,加大 best-of-n 或换 teacher)。
+13. **grounding prior context 含 initial user message**(真实 trajectory 发现的 FP):
+    `count_ungrounded_writes` 加 `initial_context` 参数,reward_state 传
+    `state["initial_user_response"]`(interaction.start_interaction 设)。
+    原因:`user_id` 这种是 **task/user 提供**的(不是 tool 返回、不是瞎编),只查 tool obs
+    会误判 ungrounded → 腿1 把所有带 user_id 的 write(book/update/cancel 全带 user_id)误杀。
+    修后:user_id 来自 initial user message → grounded。验证:你贴的 task 0 trajectory
+    (mia_li_3668 + certificate_7504069)从 ungrounded(FP) → 0 ungrounded(正确)。
 
 ## 模块索引
 
