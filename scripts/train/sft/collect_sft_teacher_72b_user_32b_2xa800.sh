@@ -5,7 +5,7 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH:-}"
 
 TEACHER_MODEL=${TEACHER_MODEL:-Qwen/Qwen2.5-72B-Instruct-AWQ}
 TEACHER_BASE_URL=${TEACHER_BASE_URL:-http://localhost:8002/v1}
-USER_MODEL=${USER_MODEL:-Qwen/Qwen2.5-32B-Instruct-AWQ}
+USER_MODEL=${USER_MODEL:-Qwen/Qwen2.5-72B-Instruct-AWQ}  # user sim aligned with reference (72B)
 USER_BASE_URL=${USER_BASE_URL:-http://localhost:8001/v1}
 
 python3 scripts/train/sft/collect_sft_data.py \
@@ -21,9 +21,9 @@ python3 scripts/train/sft/collect_sft_data.py \
   --user-base-url "${USER_BASE_URL}" \
   --teacher-model "${TEACHER_MODEL}" \
   --teacher-base-url "${TEACHER_BASE_URL}" \
-  --best-of-n "${BEST_OF_N:-8}" \
-  --temperatures "${TEACHER_TEMPERATURES:-0.0,0.0,0.5,0.5,0.8,0.8,1.0,1.0}" \
-  --num-workers "${NUM_WORKERS:-1}" \
+  --best-of-n "${BEST_OF_N:-16}" \
+  --temperatures "${TEACHER_TEMPERATURES:-0.0,0.0,0.0,0.0,0.5,0.5,0.5,0.5,0.8,0.8,0.8,0.8,1.0,1.0,1.0,1.0}" \
+  --num-workers "${NUM_WORKERS:-4}" \
   --holdout-size 10
 
 [[ -s experiments/sft_collect_airline/train.jsonl ]] || {
