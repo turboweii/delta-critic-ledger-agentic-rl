@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -43,13 +43,26 @@ def parse_temperatures(raw: str, best_of_n: int) -> list[float]:
     return temps
 
 
-def parse_tool_arguments(raw: Any) -> dict[str, Any]:
+def parse_tool_arguments(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
     if isinstance(raw, dict):
-        return raw
+        return raw, None
     if raw is None:
-        return {}
-    return json.loads(str(raw) or "{}")
-
+        return {}, None
+    if isinstance(raw, str):
+        value: Any = raw or "{}"
+        for _ in range(2):
+            try:
+                parsed = json.loads(value)
+            except Exception as exc:
+                return None, f"Invalid tool arguments JSON: {exc}"
+            if isinstance(parsed, dict):
+                return parsed, None
+            if isinstance(parsed, str):
+                value = parsed or "{}"
+                continue
+            return None, "Tool arguments JSON must decode to an object."
+        return None, "Tool arguments JSON is still a string after decoding."
+    return None, f"Tool arguments must be a dict or JSON string, got {type(raw).__name__}."
 
 def action_name(action: Any) -> str:
     if isinstance(action, dict):
@@ -177,9 +190,17 @@ def run_teacher_rollout(args: argparse.Namespace, task_id: int, sample_idx: int,
             if tool_calls:
                 for tc in tool_calls[:1]:
                     name = tc["function"]["name"]
-                    kwargs = parse_tool_arguments(tc["function"].get("arguments"))
-                    step = env.step(Action(name=name, kwargs=kwargs))
+                    kwargs, parse_error = parse_tool_arguments(tc["function"].get("arguments"))
                     num_tool_calls += 1
+                    if parse_error:
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.get("id", f"call_{num_tool_calls}"),
+                            "name": name,
+                            "content": f"Error: {parse_error}",
+                        })
+                        continue
+                    step = env.step(Action(name=name, kwargs=kwargs))
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.get("id", f"call_{num_tool_calls}"),
@@ -397,3 +418,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

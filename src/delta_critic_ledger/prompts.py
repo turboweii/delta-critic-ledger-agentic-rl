@@ -7,5 +7,5 @@ DATE_CONTEXT = (
 )
 
 
-def tau_system_prompt(wiki: str) -> str:
-    return f"# Current Date Context\n{DATE_CONTEXT}\n\n# Airline Policy\n{wiki}"
+def tau_system_prompt(wiki):
+    return DATE_CONTEXT
