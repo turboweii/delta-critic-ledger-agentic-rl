@@ -10,7 +10,7 @@ def compute_score(
     extra_info: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Return the score produced by LongHorizonTauBenchInteraction."""
+    """Return the score produced by TauBenchInteraction."""
     del solution_str, ground_truth, kwargs
     if data_source != "tau_bench_airline":
         raise ValueError(f"Unsupported data source: {data_source}")
@@ -19,3 +19,4 @@ def compute_score(
     diagnostics = dict(info.get("score_info") or {})
     diagnostics.pop("score", None)
     return {"score": score, **diagnostics}
+

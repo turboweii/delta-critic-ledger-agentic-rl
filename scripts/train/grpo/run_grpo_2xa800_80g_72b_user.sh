@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 set -euo pipefail
 
 CONDA_ENV=${CONDA_ENV:-dcl-agentic-rl}
@@ -27,44 +27,26 @@ TAU_BENCH_PATH=${TAU_BENCH_PATH:-$(pwd)/../tau-bench}
 if [[ -z "${VERL_PATH:-}" ]]; then
   if [[ -d "$(pwd)/../verl/verl" ]]; then
     VERL_PATH="$(pwd)/../verl"
-  elif [[ -d "/home/turbo/llm/agentic-grpo-longhorizon/verl/verl" ]]; then
-    VERL_PATH="/home/turbo/llm/agentic-grpo-longhorizon/verl"
+  elif [[ -d "/home/turbo/llm/agentic-grpo/verl/verl" ]]; then
+    VERL_PATH="/home/turbo/llm/agentic-grpo/verl"
   else
     VERL_PATH="$(pwd)/../verl"
   fi
 fi
 export VERL_PATH
 export PYTHONPATH="$(pwd)/src:${TAU_BENCH_PATH}:${VERL_PATH}:${PYTHONPATH:-}"
-export OPENAI_API_KEY=${OPENAI_API_KEY:-dummy}
+export OPENAI_API_KEY=${OPENAI_API_KEY:-EMPTY}
+export OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://localhost:8001/v1}
+export OPENAI_API_BASE=${OPENAI_API_BASE:-http://localhost:8001/v1}
 export VLLM_USE_V1=${VLLM_USE_V1:-1}
 export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
 export TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
 
-mkdir -p experiments/long_horizon_grpo_2xa800 outputs/grpo_long_horizon_traces_2xa800
+mkdir -p experiments/grpo_2xa800
 
-# Keep the installed veRL checkout compatible with the pinned vLLM/OmegaConf
-# stack. The patcher is idempotent and refuses unknown upstream layouts.
 python scripts/setup/patch_verl_vllm_compat.py
-python scripts/setup/patch_verl_long_horizon_grpo.py --verl-path "${VERL_PATH}"
-
-ADAPTIVE_GRPO_CONTROL=${ADAPTIVE_GRPO_CONTROL:-1}
-ADAPTIVE_OVERRIDES=()
-if [[ "${ADAPTIVE_GRPO_CONTROL}" == "1" ]]; then
-  python3 scripts/train/grpo/adaptive_kl_entropy.py \
-    --trace-dir outputs/grpo_long_horizon_traces_2xa800 \
-    --config configs/train/grpo/adaptive_kl_entropy.yaml \
-    --format summary
-  mapfile -t ADAPTIVE_OVERRIDES < <(
-    python3 scripts/train/grpo/adaptive_kl_entropy.py \
-      --trace-dir outputs/grpo_long_horizon_traces_2xa800 \
-      --config configs/train/grpo/adaptive_kl_entropy.yaml \
-      --format hydra-lines
-  )
-fi
 
 python -m verl.trainer.main_ppo \
   --config-path="$(pwd)/configs/train/grpo" \
-  --config-name=long_horizon_grpo_2xa800_80g_72b_user \
-  "${ADAPTIVE_OVERRIDES[@]}" \
-  2>&1 | tee experiments/long_horizon_grpo_2xa800/train.log
-
+  --config-name=grpo_2xa800_80g_72b_user \
+  2>&1 | tee experiments/grpo_2xa800/train.log

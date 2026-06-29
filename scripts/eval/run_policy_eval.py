@@ -115,6 +115,8 @@ def main() -> None:
                 base_url=policy_cfg["base_url"],
                 temperature=float(policy_cfg.get("temperature", 0.7)),
                 top_p=float(policy_cfg.get("top_p", 0.9)),
+                max_tokens=int(policy_cfg.get("max_tokens", 1024)),
+                max_context_chars=policy_cfg.get("max_context_chars"),
             )
             result = run_single_task(env, policy, task_idx=task_id, max_turns=int(env_cfg.get("max_turns", 30)))
             result.sample_id = sample_id

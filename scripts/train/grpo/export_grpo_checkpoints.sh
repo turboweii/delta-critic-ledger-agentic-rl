@@ -4,10 +4,10 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 cd "${ROOT_DIR}"
 
-CHECKPOINT_ROOT=${CHECKPOINT_ROOT:-experiments/long_horizon_grpo_2xa800/checkpoints}
-OUTPUT_ROOT=${OUTPUT_ROOT:-experiments/long_horizon_grpo_2xa800}
+CHECKPOINT_ROOT=${CHECKPOINT_ROOT:-experiments/grpo_2xa800/checkpoints}
+OUTPUT_ROOT=${OUTPUT_ROOT:-experiments/grpo_2xa800}
 BASE_MODEL=${BASE_MODEL:-experiments/sft_lora_merged}
-STEPS=${STEPS:-50,100,150,200,300}
+STEPS=${STEPS:-300}
 STRICT=${STRICT:-1}
 
 IFS=',' read -ra step_values <<< "${STEPS}"
@@ -26,3 +26,5 @@ for step in "${step_values[@]}"; do
     --checkpoint "${actor_dir}" \
     --output "${OUTPUT_ROOT}/hf_step_${step}"
 done
+
+

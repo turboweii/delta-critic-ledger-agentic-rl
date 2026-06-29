@@ -114,12 +114,20 @@ class OpenAICompatPolicy:
         }
 
 
-def parse_tool_arguments(raw: Any) -> dict[str, Any]:
+def parse_tool_arguments(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
     if isinstance(raw, dict):
-        return raw
+        return raw, None
     if raw is None:
-        return {}
-    return json.loads(str(raw) or "{}")
+        return {}, None
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw or "{}")
+        except Exception as exc:
+            return None, f"Invalid tool arguments JSON: {exc}"
+        if not isinstance(parsed, dict):
+            return None, "Tool arguments JSON must decode to an object."
+        return parsed, None
+    return None, f"Tool arguments must be a dict or JSON string, got {type(raw).__name__}."
 
 
 def run_single_task(env: Any, policy: OpenAICompatPolicy, task_idx: int, max_turns: int) -> EvalResult:
@@ -145,7 +153,16 @@ def run_single_task(env: Any, policy: OpenAICompatPolicy, task_idx: int, max_tur
             if tool_calls:
                 for tc in tool_calls:
                     fn = tc["function"]["name"]
-                    args = parse_tool_arguments(tc["function"].get("arguments"))
+                    args, parse_error = parse_tool_arguments(tc["function"].get("arguments"))
+                    if parse_error:
+                        num_tool_calls += 1
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.get("id", f"call_{num_tool_calls}"),
+                            "name": fn,
+                            "content": f"Error: {parse_error}",
+                        })
+                        continue
                     step = env.step(Action(name=fn, kwargs=args))
                     num_tool_calls += 1
                     messages.append({
@@ -183,8 +200,12 @@ def write_eval_report(results: list[EvalResult], output_dir: str | Path, config:
         split_path = Path(split_file)
         if split_path.exists():
             split_data = json.loads(split_path.read_text(encoding="utf-8"))
-            task_splits.update({int(task_id): "seen" for task_id in split_data.get("seen_task_ids", [])})
-            task_splits.update({int(task_id): "unseen" for task_id in split_data.get("unseen_task_ids", [])})
+            covered_seen = split_data.get("covered_seen_task_ids") or split_data.get("seen_task_ids", [])
+            uncovered_seen = split_data.get("uncovered_seen_task_ids", [])
+            unseen = split_data.get("unseen_task_ids", [])
+            task_splits.update({int(task_id): "covered_seen" for task_id in covered_seen})
+            task_splits.update({int(task_id): "uncovered_seen" for task_id in uncovered_seen})
+            task_splits.update({int(task_id): "unseen" for task_id in unseen})
 
     per_task = []
     for task_id, items in sorted(by_task.items()):
@@ -234,7 +255,7 @@ def write_eval_report(results: list[EvalResult], output_dir: str | Path, config:
         "num_samples": len(results),
         "num_tasks": len(by_task),
         "avg_tool_calls": sum(r.num_tool_calls for r in results) / len(results) if results else 0.0,
-        "by_split": split_metrics,
+        "by_split": {**split_metrics, "overall": {"num_tasks": len(by_task), "num_samples": len(results), "success_rate": success_rate, f"pass_at_{max_samples}": pass_at_k}},
         "per_task": per_task,
         "config": config,
         "results": [asdict(r) for r in results],

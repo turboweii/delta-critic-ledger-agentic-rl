@@ -8,9 +8,9 @@ from typing import Any, Optional
 
 from delta_critic_ledger.verl_integration.context import CURRENT_TAU_ENV, CURRENT_TAU_STATE, make_initial_state
 from delta_critic_ledger.verl_integration.reward_state import (
-    compute_long_horizon_components,
-    ensure_long_horizon_state,
-    init_long_horizon_state,
+    compute_tau_bench_components,
+    ensure_tau_bench_state,
+    init_tau_bench_state,
     mark_max_turn_hit,
     record_final_response,
     record_user_turn,
@@ -28,12 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def _load_tool_schemas(path: str) -> dict:
-    """Load each tool's OpenAI function parameters from a tool_config yaml.
-
-    Lets reward_state do schema-driven grounding (which params are entity
-    references that must be grounded) instead of airline-specific naming.
-    Returns {} on any error so grounding silently falls back to naming heuristics.
-    """
+    """Load tool schemas when a veRL tool config is supplied."""
     try:
         import yaml
 
@@ -49,8 +44,8 @@ def _load_tool_schemas(path: str) -> dict:
         return {}
 
 
-class LongHorizonTauBenchInteraction(BaseInteraction):
-    """veRL interaction for tau-bench with terminal reward and generic long-horizon diagnostics."""
+class TauBenchInteraction(BaseInteraction):
+    """veRL interaction for tau-bench with ordinary terminal outcome reward."""
 
     def __init__(self, config: dict):
         super().__init__(config)
@@ -61,11 +56,11 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
         self.user_base_url = config.get("user_base_url", "http://localhost:8001/v1")
         self.task_split = config.get("task_split", "test")
         self.max_turns = int(config.get("max_turns", 24))
-        self.long_horizon_config = dict(config.get("long_horizon", config.get("delta_critic", {})) or {})
-        self.trace_dir = self.long_horizon_config.get("trace_dir")
+        self.interaction_config = dict(config.get("interaction", {}) or {})
+        self.trace_dir = self.interaction_config.get("trace_dir")
         tool_config_path = config.get("tool_config_path")
         if tool_config_path:
-            self.long_horizon_config["tool_schemas"] = _load_tool_schemas(tool_config_path)
+            self.interaction_config["tool_schemas"] = _load_tool_schemas(tool_config_path)
         self._instance_dict: dict[str, dict] = {}
 
     async def start_interaction(self, instance_id: Optional[str] = None, task_id: int = 0, **kwargs) -> str:
@@ -87,7 +82,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
         initial_user_response = str(getattr(reset_result, "observation", reset_result))
         state = make_initial_state(int(task_id), instance_id=instance_id, env_id=id(env))
         state["state_id"] = id(state)
-        state["long_horizon_state"] = init_long_horizon_state(self.long_horizon_config)
+        state["tau_bench_state"] = init_tau_bench_state(self.interaction_config)
         state["initial_user_response"] = initial_user_response
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)
@@ -129,7 +124,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
             )
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)
-        ensure_long_horizon_state(state, self.long_horizon_config)
+        ensure_tau_bench_state(state, self.interaction_config)
 
         assistant_content = ""
         for msg in reversed(messages):
@@ -144,7 +139,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
             step_res = env.step(Action(name=RESPOND_ACTION_NAME, kwargs={"content": assistant_content}))
         except Exception as exc:
             state["done"] = True
-            components = compute_long_horizon_components(state)
+            components = compute_tau_bench_components(state)
             final_score = float(components["score"])
             return True, "", final_score, self._score_info(state, components, error=f"{type(exc).__name__}: {exc}")
 
@@ -160,7 +155,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
 
         if is_done or state.get("done") or total_turns >= self.max_turns:
             state["done"] = True
-            components = compute_long_horizon_components(state)
+            components = compute_tau_bench_components(state)
             final_score = float(components["score"])
             return True, "", final_score, self._score_info(state, components)
 
@@ -176,7 +171,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
         if not entry:
             return {"score": 0.0, "outcome_score": 0.0}
         state = entry["state"]
-        components = compute_long_horizon_components(state)
+        components = compute_tau_bench_components(state)
         return {
             "score": components["score"],
             "outcome_score": components["terminal_reward"],
@@ -196,7 +191,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
         trace_id = state.get("trace_id") or instance_id
         out_dir = Path(self.trace_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        components = compute_long_horizon_components(state)
+        components = compute_tau_bench_components(state)
         payload = {
             "instance_id": instance_id,
             "trace_id": trace_id,
@@ -239,4 +234,7 @@ class LongHorizonTauBenchInteraction(BaseInteraction):
 
 
 # Backward-compatible class name for existing veRL configs.
-DeltaTauBenchInteraction = LongHorizonTauBenchInteraction
+DeltaTauBenchInteraction = TauBenchInteraction
+
+
+

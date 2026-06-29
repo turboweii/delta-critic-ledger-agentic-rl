@@ -1,14 +1,2 @@
-- name: tau_bench_tool_agent
+﻿- name: tau_bench_tool_agent
   _target_: delta_critic_ledger.verl_integration.agent_loop.TauBenchToolAgentLoop
-  adaptive_entropy:
-    enabled: true
-    base_temperature: 0.7
-    min_temperature: 0.45
-    max_temperature: 0.95
-    base_top_p: 0.9
-    min_top_p: 0.75
-    max_top_p: 0.95
-    min_tool_calls: 2
-    progress_low: 0.15
-    progress_high: 0.65
-    bad_write_ratio_high: 0.35

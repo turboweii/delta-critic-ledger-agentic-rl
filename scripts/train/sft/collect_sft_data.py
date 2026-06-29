@@ -322,7 +322,7 @@ def main() -> None:
     parser.add_argument("--task-ids", default=None)
     parser.add_argument("--use-user-sim", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--user-strategy", default="llm")
-    parser.add_argument("--user-model", default="Qwen/Qwen2.5-72B-Instruct-AWQ")
+    parser.add_argument("--user-model", default="openai/Qwen/Qwen2.5-72B-Instruct-AWQ")
     parser.add_argument("--user-provider", default="openai")
     parser.add_argument("--user-base-url", default="http://localhost:8001/v1")
     parser.add_argument("--teacher-model", default="Qwen/Qwen2.5-72B-Instruct-AWQ")
@@ -360,6 +360,9 @@ def main() -> None:
 
     metas.sort(key=lambda row: row["task_id"])
     seen, holdout = build_split(task_ids, args.holdout_size)
+    successful_task_ids = {int(row["task_id"]) for row in metas if row["any_success"]}
+    covered_seen = [task_id for task_id in seen if task_id in successful_task_ids]
+    uncovered_seen = [task_id for task_id in seen if task_id not in successful_task_ids]
     n_train, n_holdout = merge_success_files(out, task_ids, seen, holdout)
     summary = {
         "source": args.mode,
@@ -374,6 +377,8 @@ def main() -> None:
         "total_success_trajectories": sum(row["num_successes"] for row in metas),
         "total_contaminated_trajectories": sum(row["num_contaminated"] for row in metas),
         "seen_task_ids": seen,
+        "covered_seen_task_ids": covered_seen,
+        "uncovered_seen_task_ids": uncovered_seen,
         "unseen_task_ids": holdout,
         "n_train_trajectories": n_train,
         "n_holdout_trajectories": n_holdout,
@@ -382,7 +387,7 @@ def main() -> None:
         json.dump(summary, f, indent=2, ensure_ascii=False)
         f.write("\n")
     with open(out / "split.json", "w", encoding="utf-8") as f:
-        json.dump({"seen_task_ids": seen, "unseen_task_ids": holdout, "total_tasks": len(task_ids)}, f, indent=2)
+        json.dump({"seen_task_ids": seen, "covered_seen_task_ids": covered_seen, "uncovered_seen_task_ids": uncovered_seen, "unseen_task_ids": holdout, "total_tasks": len(task_ids)}, f, indent=2)
         f.write("\n")
     with open(out / "collect_config.json", "w", encoding="utf-8") as f:
         json.dump(vars(args), f, indent=2, ensure_ascii=False)

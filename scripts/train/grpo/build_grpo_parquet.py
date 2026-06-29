@@ -15,7 +15,7 @@ from delta_critic_ledger.prompts import DATE_CONTEXT, tau_system_prompt
 from delta_critic_ledger.tau_compat import create_tau_env
 
 DATA_SOURCE = "tau_bench_airline"
-INTERACTION_NAME = "tau_bench_airline_long_horizon"
+INTERACTION_NAME = "tau_bench_airline"
 
 
 def parse_ids(raw: str) -> list[int]:
@@ -82,7 +82,7 @@ def main() -> None:
 
     if args.train_task_ids_from:
         metadata = json.loads(Path(args.train_task_ids_from).read_text(encoding="utf-8"))
-        train_ids = [int(value) for value in metadata.get("seen_task_ids", [])]
+        train_ids = [int(value) for value in (metadata.get("covered_seen_task_ids") or metadata.get("seen_task_ids", []))]
         if not train_ids:
             raise ValueError(f"No seen_task_ids found in {args.train_task_ids_from}")
     else:
@@ -118,3 +118,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

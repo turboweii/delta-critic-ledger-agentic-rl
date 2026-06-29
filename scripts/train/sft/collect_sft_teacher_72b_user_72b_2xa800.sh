@@ -5,7 +5,7 @@ export PYTHONPATH="$(pwd)/src:${PYTHONPATH:-}"
 
 TEACHER_MODEL=${TEACHER_MODEL:-Qwen/Qwen2.5-72B-Instruct-AWQ}
 TEACHER_BASE_URL=${TEACHER_BASE_URL:-http://localhost:8002/v1}
-USER_MODEL=${USER_MODEL:-Qwen/Qwen2.5-72B-Instruct-AWQ}  # user sim aligned with reference (72B)
+USER_MODEL=${USER_MODEL:-openai/Qwen/Qwen2.5-72B-Instruct-AWQ}  # user sim aligned with reference (72B)
 USER_BASE_URL=${USER_BASE_URL:-http://localhost:8001/v1}
 
 python3 scripts/train/sft/collect_sft_data.py \

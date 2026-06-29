@@ -5,17 +5,17 @@ env:
   num_samples_per_task: 4
   max_turns: 30
   split_file: "experiments/sft_collect_airline/split.json"
-  user_model: "Qwen/Qwen2.5-72B-Instruct-AWQ"
+  user_model: "openai/Qwen/Qwen2.5-72B-Instruct-AWQ"
   user_provider: "openai"
   user_base_url: "http://localhost:8001/v1"
 
 policy:
-  model_name: "experiments/long_horizon_grpo_2xa800/hf_step_300"
+  model_name: "experiments/grpo_2xa800/hf_step_300"
   served_model_name: "delta-assistant-7b-grpo"
   base_url: "http://localhost:8000/v1"
   temperature: 0.7
   top_p: 0.9
-
+  max_tokens: 1024
 output:
   dir: "outputs/eval_delta_grpo_airline_2xa800_72b_user"
 
@@ -24,3 +24,4 @@ wandb:
   run_name: eval_delta_grpo_airline_2xa800_72b_user
   group: grpo-eval
   job_type: eval
+

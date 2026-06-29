@@ -12,7 +12,7 @@ assistant:
   max_model_len: 16384
 
 user:
-  model_name: "Qwen/Qwen2.5-72B-Instruct-AWQ"
+  model_name: "openai/Qwen/Qwen2.5-72B-Instruct-AWQ"
   model_path: "../models/Qwen2.5-72B-Instruct-AWQ"
   quantization: "awq"
   served_name: "Qwen/Qwen2.5-72B-Instruct-AWQ"
@@ -25,7 +25,7 @@ user:
   max_num_seqs: 4
 
 teacher:
-  model_name: "Qwen/Qwen2.5-72B-Instruct-AWQ"
+  model_name: "openai/Qwen/Qwen2.5-72B-Instruct-AWQ"
   model_path: "../models/Qwen2.5-72B-Instruct-AWQ"
   quantization: "awq"
   served_name: "Qwen/Qwen2.5-72B-Instruct-AWQ"

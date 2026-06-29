@@ -14,7 +14,7 @@ data:
   val_files: experiments/grpo_airline/val.parquet
   train_batch_size: 2
   max_prompt_length: 10240
-  max_response_length: 12288  # aligned with reference (够 15 turn 累计)
+  max_response_length: 12288  # aligned with reference for 15-turn rollouts
   return_raw_chat: true
   tool_config_path: configs/tool_config/tau_bench_airline_tools.yaml
 
@@ -38,7 +38,8 @@ actor_rollout_ref:
       lr: 5.0e-6
     use_kl_loss: true
     policy_loss:
-      loss_mode: long_horizon_balanced
+      rollout_correction:
+        enable: false
     kl_loss_coef: 0.01
     kl_loss_type: low_var_kl
     use_fused_kernels: true
@@ -56,7 +57,7 @@ actor_rollout_ref:
       max_user_turns: 15
       max_assistant_turns: 15
       tool_config_path: configs/tool_config/tau_bench_airline_tools.yaml
-      interaction_config_path: configs/interaction_config/tau_bench_airline_long_horizon.yaml
+      interaction_config_path: configs/interaction_config/tau_bench_airline.yaml
     n: 8  # group size: aligned with reference (G=8); G=4 has too many zero-variance groups
     temperature: 0.7
     top_p: 0.9
@@ -65,7 +66,7 @@ actor_rollout_ref:
     gpu_memory_utilization: 0.32
     free_cache_engine: true
     max_num_seqs: 8  # match n=8
-    max_model_len: 24576  # aligned with reference (容纳 prompt 10240 + response 12288)
+    max_model_len: 24576  # aligned with reference: prompt 10240 + response 12288
     max_num_batched_tokens: 24576  # aligned with reference
     log_prob_micro_batch_size_per_gpu: 1
     val_kwargs:
@@ -84,11 +85,9 @@ actor_rollout_ref:
     log_prob_micro_batch_size_per_gpu: 1
 
 algorithm:
-  adv_estimator: grpo_long_horizon
+  adv_estimator: grpo
   kl_ctrl:
     kl_coef: 0.01
-  rollout_correction:
-    bypass_mode: true
 
 custom_reward_function:
   path: src/delta_critic_ledger/verl_integration/reward.py
@@ -99,10 +98,12 @@ trainer:
   total_training_steps: 300
   save_freq: 50
   test_freq: 50
-  default_local_dir: experiments/long_horizon_grpo_2xa800/checkpoints
+  default_local_dir: experiments/grpo_2xa800/checkpoints
   logger: [console, wandb]
   project_name: delta-critic-ledger-agentic-rl
-  experiment_name: long_horizon_grpo_2xa800_80g_72b_user
+  experiment_name: grpo_2xa800_80g_72b_user
   n_gpus_per_node: 1
   nnodes: 1
+
+
 

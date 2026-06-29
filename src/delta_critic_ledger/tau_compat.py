@@ -13,6 +13,6 @@ def create_tau_env(get_env: Callable[..., Any], **kwargs: Any) -> Any:
     if user_api_base and user_strategy != "human" and "user_api_base" not in parameters:
         os.environ["OPENAI_API_BASE"] = str(user_api_base)
         os.environ["OPENAI_BASE_URL"] = str(user_api_base)
-        os.environ.setdefault("OPENAI_API_KEY", "dummy")
+        os.environ.setdefault("OPENAI_API_KEY", "EMPTY")
     supported = {key: value for key, value in kwargs.items() if key in parameters}
     return get_env(**supported)
