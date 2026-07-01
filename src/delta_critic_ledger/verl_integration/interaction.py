@@ -47,6 +47,19 @@ def _load_tool_schemas(path: str) -> dict:
 
 
 
+def _coerce_replay_parameters(replay_action: dict[str, Any]) -> dict[str, Any]:
+    parameters = replay_action.get("parameters") or {}
+    if isinstance(parameters, dict):
+        return dict(parameters)
+    if isinstance(parameters, str):
+        try:
+            parsed = json.loads(parameters)
+        except Exception:
+            return {}
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    return {}
+
+
 def _replay_b_ndsr_actions(env: Any, state: dict[str, Any], replay_actions: list[dict[str, Any]]) -> None:
     if not replay_actions:
         return
@@ -60,9 +73,12 @@ def _replay_b_ndsr_actions(env: Any, state: dict[str, Any], replay_actions: list
             break
         kind = replay_action.get("kind")
         if kind == "tool":
+            tool_name = replay_action.get("tool_name")
+            if not isinstance(tool_name, str) or not tool_name:
+                continue
             action = Action(
-                name=replay_action["tool_name"],
-                kwargs=dict(replay_action.get("parameters") or {}),
+                name=tool_name,
+                kwargs=_coerce_replay_parameters(replay_action),
             )
             state["num_tool_calls"] += 1
         elif kind == "respond":
