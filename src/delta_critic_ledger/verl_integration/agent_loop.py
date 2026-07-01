@@ -1,7 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import copy
 from uuid import uuid4
+
+from delta_critic_ledger.training import b_ndsr, llm_judge
 
 from verl.experimental.agent_loop.agent_loop import AgentLoopOutput
 from verl.experimental.agent_loop.tool_agent_loop import AgentData, AgentState, ToolAgentLoop
@@ -66,6 +68,21 @@ class TauBenchToolAgentLoop(ToolAgentLoop):
                 response_ids = []
                 prompt_ids = agent_data.prompt_ids
             multi_modal_data = {"image": agent_data.image_data} if agent_data.image_data is not None else {}
+            extra_fields = {
+                "final_score": final_score,
+                "reward_score": final_score,
+                "score_info": score_info,
+                "turn_scores": agent_data.turn_scores,
+                "tool_rewards": agent_data.tool_rewards,
+            }
+            if getattr(agent_data, "b_ndsr_enabled", False):
+                extra_fields["b_ndsr_trace"] = {
+                    "checkpoints": getattr(agent_data, "b_ndsr_checkpoints", []),
+                    "flags": getattr(agent_data, "b_ndsr_flags", {}),
+                }
+            if llm_judge.is_enabled():
+                extra_fields["llm_judge_messages"] = copy.deepcopy(agent_data.messages)
+
             return AgentLoopOutput(
                 prompt_ids=prompt_ids,
                 response_ids=response_ids[: self.response_length],
@@ -76,13 +93,7 @@ class TauBenchToolAgentLoop(ToolAgentLoop):
                 ),
                 num_turns=agent_data.user_turns + agent_data.assistant_turns + 1,
                 metrics=agent_data.metrics,
-                extra_fields={
-                    "final_score": final_score,
-                    "reward_score": final_score,
-                    "score_info": score_info,
-                    "turn_scores": agent_data.turn_scores,
-                    "tool_rewards": agent_data.tool_rewards,
-                },
+                extra_fields=extra_fields,
             )
         finally:
             if interaction is not None:

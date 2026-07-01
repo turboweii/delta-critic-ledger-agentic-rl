@@ -87,7 +87,10 @@ actor_rollout_ref:
 algorithm:
   adv_estimator: grpo
   kl_ctrl:
+    type: fixed
     kl_coef: 0.01
+    target_kl: 0.1
+    horizon: 10000
 
 custom_reward_function:
   path: src/delta_critic_ledger/verl_integration/reward.py

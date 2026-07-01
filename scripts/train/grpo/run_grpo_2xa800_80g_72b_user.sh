@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -euo pipefail
 
 CONDA_ENV=${CONDA_ENV:-dcl-agentic-rl}
@@ -25,12 +25,14 @@ fi
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 TAU_BENCH_PATH=${TAU_BENCH_PATH:-$(pwd)/../tau-bench}
 if [[ -z "${VERL_PATH:-}" ]]; then
-  if [[ -d "$(pwd)/../verl/verl" ]]; then
+  if [[ -d "$(pwd)/verl/verl" ]]; then
+    VERL_PATH="$(pwd)/verl"
+  elif [[ -d "$(pwd)/../verl/verl" ]]; then
     VERL_PATH="$(pwd)/../verl"
   elif [[ -d "/home/turbo/llm/agentic-grpo/verl/verl" ]]; then
     VERL_PATH="/home/turbo/llm/agentic-grpo/verl"
   else
-    VERL_PATH="$(pwd)/../verl"
+    VERL_PATH="$(pwd)/verl"
   fi
 fi
 export VERL_PATH
@@ -42,6 +44,41 @@ export VLLM_USE_V1=${VLLM_USE_V1:-1}
 export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
 export TRANSFORMERS_OFFLINE=${TRANSFORMERS_OFFLINE:-1}
 
+# Optional GRPO enhancements. Defaults keep ordinary GRPO exactly on the vanilla path.
+export ADAPTIVE_KL_ENABLED=${ADAPTIVE_KL_ENABLED:-false}
+export ADAPTIVE_KL_TARGET=${ADAPTIVE_KL_TARGET:-0.1}
+export ADAPTIVE_KL_HORIZON=${ADAPTIVE_KL_HORIZON:-10000}
+export B_NDSR_ENABLED=${B_NDSR_ENABLED:-false}
+export JASS_ENABLED=${JASS_ENABLED:-false}
+export LLM_JUDGE_ENABLED=${LLM_JUDGE_ENABLED:-false}
+export JASS_JUDGE_MODEL=${JASS_JUDGE_MODEL:-Qwen/Qwen2.5-72B-Instruct-AWQ}
+export JASS_JUDGE_BASE_URL=${JASS_JUDGE_BASE_URL:-http://localhost:8001/v1}
+export LLM_JUDGE_MODEL=${LLM_JUDGE_MODEL:-Qwen/Qwen2.5-72B-Instruct-AWQ}
+export LLM_JUDGE_BASE_URL=${LLM_JUDGE_BASE_URL:-http://localhost:8001/v1}
+export LLM_JUDGE_ALPHA=${LLM_JUDGE_ALPHA:-0.2}
+export B_NDSR_ROOT_MIN_SAMPLES=${B_NDSR_ROOT_MIN_SAMPLES:-4}
+export B_NDSR_ROOT_MAX_SAMPLES=${B_NDSR_ROOT_MAX_SAMPLES:-8}
+export B_NDSR_ROOT_INCREMENT=${B_NDSR_ROOT_INCREMENT:-2}
+export B_NDSR_TOTAL_BUDGET_PER_TASK=${B_NDSR_TOTAL_BUDGET_PER_TASK:-12}
+export B_NDSR_SUFFIX_MIN_SAMPLES=${B_NDSR_SUFFIX_MIN_SAMPLES:-4}
+
+EXTRA_ARGS=()
+if [[ "${ADAPTIVE_KL_ENABLED,,}" == "true" || "${ADAPTIVE_KL_ENABLED}" == "1" ]]; then
+  EXTRA_ARGS+=(algorithm.kl_ctrl.type=adaptive)
+  EXTRA_ARGS+=(algorithm.kl_ctrl.target_kl="${ADAPTIVE_KL_TARGET}")
+  EXTRA_ARGS+=(algorithm.kl_ctrl.horizon="${ADAPTIVE_KL_HORIZON}")
+else
+  EXTRA_ARGS+=(algorithm.kl_ctrl.type=fixed)
+fi
+
+if [[ "${B_NDSR_ENABLED,,}" == "true" || "${B_NDSR_ENABLED}" == "1" ]]; then
+  EXTRA_ARGS+=(actor_rollout_ref.rollout.n=1)
+  EXTRA_ARGS+=(actor_rollout_ref.actor.ppo_mini_batch_size=2)
+  EXTRA_ARGS+=(actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1)
+  EXTRA_ARGS+=(actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1)
+  EXTRA_ARGS+=(trainer.experiment_name=grpo_2xa800_80g_72b_user_b_ndsr)
+fi
+
 mkdir -p experiments/grpo_2xa800
 
 python scripts/setup/patch_verl_vllm_compat.py
@@ -49,4 +86,5 @@ python scripts/setup/patch_verl_vllm_compat.py
 python -m verl.trainer.main_ppo \
   --config-path="$(pwd)/configs/train/grpo" \
   --config-name=grpo_2xa800_80g_72b_user \
+  "${EXTRA_ARGS[@]}" \
   2>&1 | tee experiments/grpo_2xa800/train.log

@@ -16,6 +16,7 @@ from delta_critic_ledger.verl_integration.reward_state import (
     record_user_turn,
 )
 from delta_critic_ledger.tau_compat import create_tau_env
+from delta_critic_ledger.training import b_ndsr
 
 try:
     from verl.interactions.base import BaseInteraction
@@ -42,6 +43,43 @@ def _load_tool_schemas(path: str) -> dict:
         return schemas
     except Exception:
         return {}
+
+
+
+
+def _replay_b_ndsr_actions(env: Any, state: dict[str, Any], replay_actions: list[dict[str, Any]]) -> None:
+    if not replay_actions:
+        return
+    if not b_ndsr.is_enabled():
+        raise RuntimeError("Received B-NDSR replay actions while B_NDSR_ENABLED is false.")
+
+    from tau_bench.types import Action, RESPOND_ACTION_NAME
+
+    for replay_action in replay_actions:
+        if state.get("done", False):
+            break
+        kind = replay_action.get("kind")
+        if kind == "tool":
+            action = Action(
+                name=replay_action["tool_name"],
+                kwargs=dict(replay_action.get("parameters") or {}),
+            )
+            state["num_tool_calls"] += 1
+        elif kind == "respond":
+            action = Action(
+                name=RESPOND_ACTION_NAME,
+                kwargs={"content": replay_action.get("content", "")},
+            )
+            record_final_response(state, replay_action.get("content", "") or "")
+            state["num_user_turns"] += 1
+            record_user_turn(state)
+        else:
+            raise ValueError(f"Unknown B-NDSR replay action kind: {kind}")
+
+        step_res = env.step(action)
+        state["total_reward"] += float(getattr(step_res, "reward", 0.0))
+        if bool(getattr(step_res, "done", False)):
+            state["done"] = True
 
 
 class TauBenchInteraction(BaseInteraction):
@@ -84,6 +122,9 @@ class TauBenchInteraction(BaseInteraction):
         state["state_id"] = id(state)
         state["tau_bench_state"] = init_tau_bench_state(self.interaction_config)
         state["initial_user_response"] = initial_user_response
+        replay_actions = kwargs.get("b_ndsr_replay_actions") or []
+        if replay_actions:
+            _replay_b_ndsr_actions(env, state, replay_actions)
         CURRENT_TAU_ENV.set(env)
         CURRENT_TAU_STATE.set(state)
         self._instance_dict[instance_id] = {
